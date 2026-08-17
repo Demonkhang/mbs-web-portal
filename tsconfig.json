@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "experimentalDecorators": true,
+    "useDefineForClassFields": false,
+    "module": "ESNext",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "allowJs": true,
+    "jsx": "react-jsx",
+    "paths": {
+      "@/*": ["./apps/web/src/*"],
+      "@mbs/types": ["./packages/types/src"],
+      "@mbs/types/*": ["./packages/types/src/*"],
+      "@mbs/ui": ["./packages/ui/src"],
+      "@mbs/ui/*": ["./packages/ui/src/*"],
+      "@mbs/validation": ["./packages/validation/src"],
+      "@mbs/validation/*": ["./packages/validation/src/*"],
+      "@mbs/security-utils": ["./packages/security-utils/src"],
+      "@mbs/security-utils/*": ["./packages/security-utils/src/*"],
+      "@mbs/database": ["./packages/database/src"],
+      "@mbs/database/*": ["./packages/database/src/*"]
+    },
+    "allowImportingTsExtensions": true,
+    "noEmit": true
+  },
+  "include": ["apps/**/*", "packages/**/*", "vite.config.ts"]
+}

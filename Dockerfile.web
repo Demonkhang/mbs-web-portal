@@ -1,0 +1,33 @@
+# Multi-stage Dockerfile for Frontend Web (@mbs/web)
+FROM node:20-alpine AS builder
+WORKDIR /app
+
+# 1. Copy package manifests first for caching
+COPY package*.json ./
+COPY apps/web/package*.json ./apps/web/
+COPY packages/database/package*.json ./packages/database/
+COPY packages/database/prisma ./packages/database/prisma/
+
+# 2. Copy source code
+COPY packages ./packages
+COPY apps/web ./apps/web
+COPY index.html ./
+COPY vite.config.ts ./
+COPY tsconfig.json ./
+
+# 3. Install dependencies inside container
+RUN npm install --ignore-scripts=false
+
+# 4. Generate Prisma Client types
+RUN npx prisma generate --schema=packages/database/prisma/schema.prisma
+
+# 5. Build static frontend bundle
+RUN npx vite build
+
+# Production Nginx stage (COPY from apps/web/dist)
+FROM nginx:alpine AS runner
+COPY --from=builder /app/apps/web/dist /usr/share/nginx/html
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

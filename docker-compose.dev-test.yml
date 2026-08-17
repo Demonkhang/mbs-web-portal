@@ -1,0 +1,52 @@
+services:
+  # 1. Isolated PostgreSQL Database for Docker Testing (Port 5433)
+  postgres-docker:
+    image: postgres:16-alpine
+    container_name: mbs_postgres_test
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: Khang1811password_docker
+      POSTGRES_DB: mbs_db_docker
+    ports:
+      - "5433:5432"
+    volumes:
+      - mbs_postgres_test_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d mbs_db_docker"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 2. Isolated Backend Core API Container (Port 4001)
+  api-docker:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: mbs_api_test
+    restart: always
+    ports:
+      - "4001:4000"
+    environment:
+      PORT: 4000
+      NODE_ENV: development
+      DATABASE_URL: "postgresql://postgres:Khang1811password_docker@postgres-docker:5432/mbs_db_docker?schema=public"
+      JWT_SECRET: "mbs-docker-isolated-test-secret-2026"
+    depends_on:
+      postgres-docker:
+        condition: service_healthy
+
+  # 3. Isolated Frontend Web/CMS Container (Port 3001)
+  web-docker:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: mbs_web_test
+    restart: always
+    ports:
+      - "3001:80"
+    depends_on:
+      - api-docker
+
+volumes:
+  mbs_postgres_test_data:

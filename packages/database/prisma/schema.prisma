@@ -1,0 +1,129 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  EDITOR
+  OFFICER
+  CITIZEN
+}
+
+enum PostStatus {
+  DRAFT
+  PENDING_APPROVAL
+  PUBLISHED
+  ARCHIVED
+}
+
+enum SubmissionStatus {
+  TIEP_NHAN
+  THAM_DINH
+  YEU_CAU_BO_SUNG
+  HOAN_TAT
+  TU_CHOI
+}
+
+model User {
+  id           String      @id @default(uuid())
+  username     String      @unique
+  email        String      @unique
+  passwordHash String
+  fullName     String
+  role         Role        @default(CITIZEN)
+  department   String?
+  avatarUrl    String?
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  posts        Post[]
+  auditLogs    AuditLog[]
+}
+
+model Category {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  posts     Post[]
+  createdAt DateTime @default(now())
+}
+
+model Post {
+  id              String     @id @default(uuid())
+  slug            String     @unique
+  title           String
+  summary         String
+  content         String     @db.Text
+  categoryId      String
+  category        Category   @relation(fields: [categoryId], references: [id])
+  authorId        String
+  author          User       @relation(fields: [authorId], references: [id])
+  views           Int        @default(0)
+  imageUrl        String
+  imageCaption    String?
+  isFeatured      Boolean    @default(false)
+  isSpotlight     Boolean    @default(false)
+  tags            String[]
+  status          PostStatus @default(DRAFT)
+  publishedAt     DateTime?
+  metaTitle       String?
+  metaDescription String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+}
+
+model LegalDocument {
+  id              String   @id @default(uuid())
+  code            String   @unique
+  title           String
+  docType         String
+  issuingAgency   String
+  signer          String
+  issueDate       DateTime
+  effectiveDate   DateTime
+  expirationDate  DateTime?
+  status          String
+  domain          String
+  fileSize        String
+  fileUrl         String?
+  downloadsCount  Int      @default(0)
+  viewsCount      Int      @default(0)
+  fullText        String   @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model PublicServiceSubmission {
+  id              String           @id @default(uuid())
+  trackingCode    String           @unique
+  serviceName     String
+  applicantName   String
+  applicantPhone  String
+  applicantEmail  String
+  submissionDate  DateTime         @default(now())
+  expectedDate    DateTime
+  currentStep     Int              @default(1)
+  status          SubmissionStatus @default(TIEP_NHAN)
+  statusText      String
+  assignedOfficer String?
+  department      String
+  notes           String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  action    String
+  module    String
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  ipAddress String?
+  details   String?  @db.Text
+  createdAt DateTime @default(now())
+}

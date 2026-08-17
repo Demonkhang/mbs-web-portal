@@ -1,0 +1,6 @@
+{
+  "name": "Ban Quản lý MBS - Cổng Thông Tin Điện Tử",
+  "description": "Cổng thông tin điện tử Ban Quản lý các Khu liên hợp xử lý chất thải TP.HCM (MBS) - Dịch vụ công trực tuyến, Tra cứu văn bản, Tin tức & Phản ánh kiến nghị",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

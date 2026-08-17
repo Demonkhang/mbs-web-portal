@@ -1,0 +1,20 @@
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+COPY package*.json ./
+COPY pnpm-workspace.yaml ./
+COPY apps/api/package*.json ./apps/api/
+COPY packages/ ./packages/
+
+RUN npm install
+COPY apps/api ./apps/api
+RUN npm run build --workspace=@mbs/api
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=builder /app/apps/api/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+
+EXPOSE 4000
+CMD ["node", "dist/main.js"]
