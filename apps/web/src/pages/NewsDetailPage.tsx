@@ -1,12 +1,11 @@
-import React, { useState } from 'react';
-import { Calendar, Eye, User, Share2, Printer, ArrowLeft, Clock, Tag, MessageSquare, Check, Sparkles, ChevronRight } from 'lucide-react';
-import { MOCK_NEWS } from '../lib/mock-data';
+import React, { useState, useEffect } from 'react';
+import { Calendar, Eye, User, Share2, Printer, Check } from 'lucide-react';
 import { Breadcrumb } from '../components/ui/breadcrumb';
 import { Badge } from '../components/ui/badge';
-import { Button } from '../components/ui/button';
 import { TTSReader } from '../components/shared/TTSReader';
 import { formatDate } from '../lib/utils';
 import { useToast } from '../components/ui/toast';
+import { fetchApi } from '../services/api-client';
 
 export interface NewsDetailPageProps {
   slug: string;
@@ -18,8 +17,33 @@ export const NewsDetailPage: React.FC<NewsDetailPageProps> = ({ slug, onNavigate
   const [copied, setCopied] = useState(false);
   const [fontSize, setFontSize] = useState<'normal' | 'large' | 'xlarge'>('normal');
 
-  const article = MOCK_NEWS.find((item) => item.slug === slug) || MOCK_NEWS[0];
-  const relatedNews = MOCK_NEWS.filter((item) => item.id !== article.id).slice(0, 3);
+  const [article, setArticle] = useState<any>(null);
+  const [relatedNews, setRelatedNews] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    setIsLoading(true);
+    // Fetch article details by slug from PostgreSQL DB API
+    fetchApi<{ data: any }>(`/v1/posts/${slug}`)
+      .then((res) => {
+        if (res && res.data) {
+          setArticle(res.data);
+        }
+      })
+      .catch((err) => {
+        console.error('Lỗi tải bài viết:', err);
+      })
+      .finally(() => setIsLoading(false));
+
+    // Fetch related published posts
+    fetchApi<{ data: any[] }>('/v1/posts?status=PUBLISHED&limit=4')
+      .then((res) => {
+        if (res && res.data) {
+          setRelatedNews(res.data.filter((p) => p.slug !== slug).slice(0, 3));
+        }
+      })
+      .catch(() => {});
+  }, [slug]);
 
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href);
@@ -32,6 +56,28 @@ export const NewsDetailPage: React.FC<NewsDetailPageProps> = ({ slug, onNavigate
     window.print();
   };
 
+  if (isLoading) {
+    return (
+      <div className="bg-slate-50 min-h-screen py-16 text-center text-slate-500 text-sm">
+        Đang tải thông tin chi tiết bài viết từ CSDL PostgreSQL...
+      </div>
+    );
+  }
+
+  if (!article) {
+    return (
+      <div className="bg-slate-50 min-h-screen py-16 text-center text-slate-500 space-y-4">
+        <h2 className="text-xl font-bold text-slate-800">Không tìm thấy bài viết trong CSDL PostgreSQL</h2>
+        <button
+          onClick={() => onNavigate('/tin-tuc')}
+          className="text-xs font-bold text-emerald-700 hover:underline cursor-pointer"
+        >
+          ← Quay lại danh sách tin tức
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-slate-50 min-h-screen py-8">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
@@ -40,43 +86,43 @@ export const NewsDetailPage: React.FC<NewsDetailPageProps> = ({ slug, onNavigate
           items={[
             { label: 'Trang chủ', href: '/' },
             { label: 'Tin tức', href: '/tin-tuc' },
-            { label: article.categoryName, href: `/tin-tuc?cat=${article.categorySlug || article.category}` },
+            { label: article.category?.name || 'Tin tức', href: `/tin-tuc?cat=${article.category?.slug || 'all'}` },
             { label: 'Chi tiết bài viết' },
           ]}
           onNavigate={onNavigate}
         />
 
         {/* Article Container */}
-        <article className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-10 space-y-6">
+        <article className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 sm:p-10 space-y-6">
           {/* Header Info */}
           <div className="space-y-4 border-b border-slate-100 pb-6">
             <div className="flex items-center gap-2">
-              <Badge variant="gov">{article.categoryName}</Badge>
-              <span className="text-xs text-slate-400 font-mono">• MBS Media Release</span>
+              <Badge variant="gov">{article.category?.name || 'Tin tức'}</Badge>
+              <span className="text-xs text-slate-400 font-mono">• MBS Official Post</span>
             </div>
 
             <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-slate-900 leading-tight">
               {article.title}
             </h1>
 
-            {/* Meta bar: Date, author, views, tools */}
+            {/* Meta bar */}
             <div className="flex flex-wrap items-center justify-between gap-4 pt-2 text-xs text-slate-500">
               <div className="flex items-center gap-4 flex-wrap">
                 <span className="flex items-center gap-1.5 font-medium">
                   <User className="w-3.5 h-3.5 text-emerald-700" />
-                  {article.author}
+                  {article.author?.fullName || 'Ban Biên tập MBS'}
                 </span>
                 <span className="flex items-center gap-1.5 font-mono">
                   <Calendar className="w-3.5 h-3.5 text-emerald-700" />
-                  {formatDate(article.publishedAt)}
+                  {formatDate(article.publishedAt || article.createdAt)}
                 </span>
                 <span className="flex items-center gap-1.5">
                   <Eye className="w-3.5 h-3.5 text-slate-400" />
-                  {article.views} lượt xem
+                  {article.views || 0} lượt xem
                 </span>
               </div>
 
-              {/* Utility buttons: Font size, Share, Print */}
+              {/* Utility buttons */}
               <div className="flex items-center gap-2">
                 <div className="flex items-center bg-slate-100 rounded-lg p-0.5 text-xs font-bold text-slate-700">
                   <button
@@ -122,12 +168,14 @@ export const NewsDetailPage: React.FC<NewsDetailPageProps> = ({ slug, onNavigate
           </div>
 
           {/* AI Voice Speech Reader (TTS) */}
-          <TTSReader text={`${article.title}. ${article.summary}. ${article.content}`} />
+          <TTSReader text={`${article.title}. ${article.summary || ''}.`} />
 
           {/* Summary Lead Box */}
-          <div className="p-4 sm:p-5 bg-emerald-50/70 border-l-4 border-emerald-700 rounded-r-xl text-slate-800 font-semibold text-xs sm:text-sm leading-relaxed">
-            {article.summary}
-          </div>
+          {article.summary && (
+            <div className="p-4 sm:p-5 bg-emerald-50/70 border-l-4 border-emerald-700 rounded-r-xl text-slate-800 font-semibold text-xs sm:text-sm leading-relaxed">
+              {article.summary}
+            </div>
+          )}
 
           {/* Main Hero Image */}
           {article.imageUrl && (
@@ -140,7 +188,7 @@ export const NewsDetailPage: React.FC<NewsDetailPageProps> = ({ slug, onNavigate
                 />
               </div>
               <figcaption className="text-center text-xs text-slate-500 italic">
-                Hình ảnh thực tế tại Khu Liên hợp Xử lý Chất thải TP.HCM - Nguồn: Ban Quản lý MBS
+                Hình ảnh tại Ban Quản lý MBS - Nguồn: Cổng thông tin MBS
               </figcaption>
             </figure>
           )}
@@ -148,89 +196,41 @@ export const NewsDetailPage: React.FC<NewsDetailPageProps> = ({ slug, onNavigate
           {/* Article Body Content */}
           <div
             className={`space-y-4 text-slate-700 leading-relaxed ${
-              fontSize === 'large' ? 'text-base' : fontSize === 'xlarge' ? 'text-lg' : 'text-sm sm:text-base'
+              fontSize === 'large' ? 'text-base' : fontSize === 'xlarge' ? 'text-lg' : 'text-sm'
             }`}
-          >
-            {article.content.split('\n\n').map((paragraph, index) => {
-              if (paragraph.startsWith('**') && paragraph.endsWith('**')) {
-                return (
-                  <h3 key={index} className="text-base sm:text-lg font-bold text-slate-900 mt-6 pt-2 border-t border-slate-100">
-                    {paragraph.replace(/\*\*/g, '')}
-                  </h3>
-                );
-              }
-              return (
-                <p key={index} className="text-justify">
-                  {paragraph}
-                </p>
-              );
-            })}
-          </div>
-
-          {/* Source Attribution & Tags */}
-          <div className="pt-6 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <Tag className="w-4 h-4 text-slate-400" />
-              <span className="text-xs text-slate-500 font-semibold">Từ khóa:</span>
-              <div className="flex flex-wrap gap-1.5">
-                {['MBS TP.HCM', 'Xử lý rác thải', 'Môi trường đô thị', 'Công nghệ đốt phát điện'].map((tag, i) => (
-                  <span key={i} className="text-[11px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-medium">
-                    #{tag}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <div className="text-right text-xs font-bold text-slate-800">
-              Ban Biên tập Cổng Thông tin điện tử MBS
-            </div>
-          </div>
+            dangerouslySetInnerHTML={{ __html: article.content }}
+          />
         </article>
 
-        {/* Navigation & Related News Section */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onNavigate('/tin-tuc')}
-              className="gap-2"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Quay lại danh sách tin tức</span>
-            </Button>
-          </div>
-
-          {/* Related News 3-grid */}
-          <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
-            <h3 className="text-base font-black text-slate-900 uppercase tracking-wide border-b border-slate-100 pb-3">
-              TIN TỨC CÙNG CHUYÊN MỤC
+        {/* Related Articles */}
+        {relatedNews.length > 0 && (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-4">
+            <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider pb-3 border-b-2 border-emerald-700">
+              TIN TỨC LIÊN QUAN
             </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {relatedNews.map((item) => (
                 <div
                   key={item.id}
                   onClick={() => onNavigate(`/tin-tuc/${item.slug}`)}
-                  className="group cursor-pointer space-y-2 hover:bg-slate-50 p-2 rounded-xl transition-colors"
+                  className="p-3 bg-slate-50 hover:bg-emerald-50/40 rounded-xl border border-slate-200 hover:border-emerald-500 transition-all cursor-pointer space-y-2 group"
                 >
-                  <div className="aspect-video rounded-lg overflow-hidden bg-slate-100">
-                    <img
-                      src={item.imageUrl}
-                      alt={item.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                    />
-                  </div>
-                  <span className="text-[10px] text-slate-400 font-mono block">
-                    {formatDate(item.publishedAt)}
-                  </span>
+                  <img
+                    src={item.imageUrl || 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=400&q=80'}
+                    alt={item.title}
+                    className="w-full h-28 object-cover rounded-lg group-hover:scale-102 transition-transform"
+                  />
                   <h4 className="text-xs font-bold text-slate-900 group-hover:text-emerald-800 line-clamp-2 leading-snug">
                     {item.title}
                   </h4>
+                  <span className="text-[10px] text-slate-400 block">
+                    {formatDate(item.publishedAt || item.createdAt)}
+                  </span>
                 </div>
               ))}
             </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

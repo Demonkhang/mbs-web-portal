@@ -1,18 +1,40 @@
-import React from 'react';
-import { ChevronRight, Calendar, Eye, Download, FileText, ArrowRight, ShieldCheck } from 'lucide-react';
-import { MOCK_NEWS, MOCK_DOCUMENTS } from '../../lib/mock-data';
+import React, { useState, useEffect } from 'react';
+import { ChevronRight, Calendar, Eye } from 'lucide-react';
 import { formatDate } from '../../lib/utils';
 import { Badge } from '../ui/badge';
-import { Button } from '../ui/button';
+import { fetchApi } from '../../services/api-client';
 
 export interface FeaturedNewsProps {
   onNavigate: (path: string) => void;
 }
 
 export const FeaturedNews: React.FC<FeaturedNewsProps> = ({ onNavigate }) => {
-  const featuredArticle = MOCK_NEWS[0];
-  const sideArticles = MOCK_NEWS.slice(1, 4);
-  const recentDocs = MOCK_DOCUMENTS.slice(0, 4);
+  const [posts, setPosts] = useState<any[]>([]);
+  const [documents, setDocuments] = useState<any[]>([]);
+
+  useEffect(() => {
+    // Fetch published news from PostgreSQL DB API
+    fetchApi<{ data: any[] }>('/v1/posts?status=PUBLISHED&limit=4')
+      .then((res) => {
+        if (res && res.data && res.data.length > 0) {
+          setPosts(res.data);
+        }
+      })
+      .catch(() => {});
+
+    // Fetch legal documents from PostgreSQL DB API
+    fetchApi<{ data: any[] }>('/v1/documents')
+      .then((res) => {
+        if (res && res.data && res.data.length > 0) {
+          setDocuments(res.data.slice(0, 4));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const featuredArticle = posts[0];
+  const sideArticles = posts.slice(1, 4);
+  const recentDocs = documents.slice(0, 4);
 
   return (
     <section className="py-12 bg-white">
@@ -44,24 +66,24 @@ export const FeaturedNews: React.FC<FeaturedNewsProps> = ({ onNavigate }) => {
               >
                 <div className="relative aspect-video overflow-hidden">
                   <img
-                    src={featuredArticle.imageUrl}
+                    src={featuredArticle.imageUrl || 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80'}
                     alt={featuredArticle.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
                   <div className="absolute top-3 left-3">
-                    <Badge variant="gov">{featuredArticle.categoryName}</Badge>
+                    <Badge variant="gov">{featuredArticle.category?.name || 'Khoa học Công nghệ'}</Badge>
                   </div>
                 </div>
                 <div className="p-5 space-y-2">
                   <div className="flex items-center gap-3 text-xs text-slate-500">
                     <span className="flex items-center gap-1">
                       <Calendar className="w-3.5 h-3.5" />
-                      {formatDate(featuredArticle.publishedAt)}
+                      {formatDate(featuredArticle.publishedAt || featuredArticle.createdAt)}
                     </span>
                     <span>•</span>
                     <span className="flex items-center gap-1">
                       <Eye className="w-3.5 h-3.5" />
-                      {featuredArticle.views} lượt xem
+                      {featuredArticle.views || 0} lượt xem
                     </span>
                   </div>
                   <h4 className="text-base sm:text-lg font-bold text-slate-900 group-hover:text-emerald-800 transition-colors leading-snug">
@@ -83,19 +105,19 @@ export const FeaturedNews: React.FC<FeaturedNewsProps> = ({ onNavigate }) => {
                   className="py-3.5 flex gap-4 group cursor-pointer hover:bg-slate-50/80 rounded-xl px-2 transition-colors"
                 >
                   <img
-                    src={article.imageUrl}
+                    src={article.imageUrl || 'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?auto=format&fit=crop&w=800&q=80'}
                     alt={article.title}
                     className="w-24 h-20 sm:w-28 sm:h-20 rounded-lg object-cover shrink-0 group-hover:scale-105 transition-transform"
                   />
                   <div className="flex-1 min-w-0 space-y-1">
                     <span className="text-[11px] font-bold text-emerald-700 uppercase">
-                      {article.categoryName}
+                      {article.category?.name || 'Tin tức'}
                     </span>
                     <h5 className="text-xs sm:text-sm font-bold text-slate-900 group-hover:text-emerald-800 line-clamp-2 leading-snug transition-colors">
                       {article.title}
                     </h5>
                     <span className="text-[11px] text-slate-400 block">
-                      {formatDate(article.publishedAt)}
+                      {formatDate(article.publishedAt || article.createdAt)}
                     </span>
                   </div>
                 </div>
@@ -135,7 +157,7 @@ export const FeaturedNews: React.FC<FeaturedNewsProps> = ({ onNavigate }) => {
                         {doc.code}
                       </span>
                       <span className="text-[11px] font-semibold text-slate-500">
-                        {doc.issueDate}
+                        {formatDate(doc.issueDate)}
                       </span>
                     </div>
 
@@ -152,25 +174,6 @@ export const FeaturedNews: React.FC<FeaturedNewsProps> = ({ onNavigate }) => {
                   </div>
                 </div>
               ))}
-            </div>
-
-            {/* Callout box: Tra cứu văn bản theo số hiệu */}
-            <div className="p-4 bg-gradient-to-br from-slate-900 to-emerald-950 text-white rounded-2xl shadow-md space-y-3">
-              <div className="flex items-center gap-2">
-                <FileText className="w-5 h-5 text-amber-400" />
-                <h4 className="text-sm font-bold">Tra cứu hệ thống Văn bản pháp luật</h4>
-              </div>
-              <p className="text-xs text-slate-300">
-                Tìm kiếm hơn 1.200 văn bản pháp quy, quy chuẩn kỹ thuật quốc gia về môi trường và xử lý chất thải rắn.
-              </p>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => onNavigate('/van-ban')}
-                className="w-full justify-center bg-amber-500 text-slate-950 hover:bg-amber-400 font-bold"
-              >
-                Tra cứu ngay
-              </Button>
             </div>
           </div>
         </div>

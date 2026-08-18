@@ -1,10 +1,10 @@
-import React, { useState, useMemo } from 'react';
-import { Search, Calendar, Eye, Tag, ChevronRight, Filter, Flame, Clock } from 'lucide-react';
-import { MOCK_NEWS, NEWS_CATEGORIES } from '../lib/mock-data';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Search, Calendar, Eye, ChevronRight } from 'lucide-react';
 import { Breadcrumb } from '../components/ui/breadcrumb';
 import { Badge } from '../components/ui/badge';
 import { Pagination } from '../components/ui/pagination';
 import { formatDate, cn } from '../lib/utils';
+import { fetchApi } from '../services/api-client';
 
 export interface NewsPageProps {
   onNavigate: (path: string) => void;
@@ -17,17 +17,39 @@ export const NewsPage: React.FC<NewsPageProps> = ({ onNavigate, initialCategory 
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 6;
 
+  const [posts, setPosts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    // Fetch Categories
+    fetchApi<{ data: any[] }>('/v1/categories')
+      .then((res) => {
+        if (res && res.data) setCategories(res.data);
+      })
+      .catch(() => {});
+
+    // Fetch Published Posts from PostgreSQL DB
+    setIsLoading(true);
+    fetchApi<{ data: any[] }>('/v1/posts?status=PUBLISHED')
+      .then((res) => {
+        if (res && res.data) setPosts(res.data);
+      })
+      .catch(() => {})
+      .finally(() => setIsLoading(false));
+  }, []);
+
   const filteredNews = useMemo(() => {
-    return MOCK_NEWS.filter((item) => {
-      const catSlug = item.categorySlug || item.category;
+    return posts.filter((item) => {
+      const catSlug = item.category?.slug || item.categorySlug || item.categoryId;
       const matchCat = selectedCategory === 'all' || catSlug === selectedCategory;
       const matchQuery =
         !searchKeyword.trim() ||
-        item.title.toLowerCase().includes(searchKeyword.toLowerCase()) ||
-        item.summary.toLowerCase().includes(searchKeyword.toLowerCase());
+        item.title?.toLowerCase().includes(searchKeyword.toLowerCase()) ||
+        item.summary?.toLowerCase().includes(searchKeyword.toLowerCase());
       return matchCat && matchQuery;
     });
-  }, [selectedCategory, searchKeyword]);
+  }, [posts, selectedCategory, searchKeyword]);
 
   const totalPages = Math.ceil(filteredNews.length / pageSize) || 1;
   const paginatedNews = useMemo(() => {
@@ -35,7 +57,9 @@ export const NewsPage: React.FC<NewsPageProps> = ({ onNavigate, initialCategory 
     return filteredNews.slice(start, start + pageSize);
   }, [filteredNews, currentPage]);
 
-  const topViews = [...MOCK_NEWS].sort((a, b) => b.views - a.views).slice(0, 4);
+  const topViews = useMemo(() => {
+    return [...posts].sort((a, b) => (b.views || 0) - (a.views || 0)).slice(0, 4);
+  }, [posts]);
 
   return (
     <div className="bg-slate-50 min-h-screen py-8">
@@ -56,7 +80,7 @@ export const NewsPage: React.FC<NewsPageProps> = ({ onNavigate, initialCategory 
               TIN TỨC & HOẠT ĐỘNG
             </h1>
             <p className="text-xs sm:text-sm text-slate-500 mt-1">
-              Thông tin thời sự, chỉ đạo điều hành, quản lý kỹ thuật và tiến độ các dự án xử lý chất thải TP.HCM
+              Thông tin thời sự, chỉ đạo điều hành, quản lý kỹ thuật và tiến độ các dự án xử lý chất thải TP.HCM (CSDL PostgreSQL)
             </p>
           </div>
 
@@ -70,7 +94,7 @@ export const NewsPage: React.FC<NewsPageProps> = ({ onNavigate, initialCategory 
                 setSearchKeyword(e.target.value);
                 setCurrentPage(1);
               }}
-              placeholder="Tìm kiếm bài viết..."
+              placeholder="Tìm kiếm bài viết trong DB..."
               className="w-full pl-9 pr-4 py-2 bg-white rounded-xl border border-slate-300 text-xs sm:text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none shadow-xs"
             />
           </div>
@@ -90,10 +114,10 @@ export const NewsPage: React.FC<NewsPageProps> = ({ onNavigate, initialCategory 
                 : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
             )}
           >
-            Tất cả chuyên mục ({MOCK_NEWS.length})
+            Tất cả chuyên mục ({posts.length})
           </button>
-          {NEWS_CATEGORIES.map((cat) => {
-            const count = MOCK_NEWS.filter((n) => (n.categorySlug || n.category) === cat.slug).length;
+          {categories.map((cat) => {
+            const count = posts.filter((n) => (n.category?.slug || n.categoryId) === cat.slug || n.categoryId === cat.id).length;
             return (
               <button
                 key={cat.id}
@@ -114,11 +138,15 @@ export const NewsPage: React.FC<NewsPageProps> = ({ onNavigate, initialCategory 
           })}
         </div>
 
-        {/* Main Content Layout (8 cols list + 4 cols sidebar) */}
+        {/* Main Content Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* Main List */}
           <div className="lg:col-span-8 space-y-6">
-            {paginatedNews.length === 0 ? (
+            {isLoading ? (
+              <div className="bg-white rounded-2xl p-12 text-center border border-slate-200 text-slate-500 text-sm">
+                Đang tải danh sách bài viết từ CSDL PostgreSQL...
+              </div>
+            ) : paginatedNews.length === 0 ? (
               <div className="bg-white rounded-2xl p-12 text-center border border-slate-200 space-y-3">
                 <Search className="w-12 h-12 text-slate-300 mx-auto" />
                 <h3 className="text-base font-bold text-slate-800">Không tìm thấy bài viết nào phù hợp</h3>
@@ -145,42 +173,42 @@ export const NewsPage: React.FC<NewsPageProps> = ({ onNavigate, initialCategory 
                   >
                     <div className="relative w-full sm:w-56 h-40 sm:h-auto rounded-xl overflow-hidden shrink-0 bg-slate-100">
                       <img
-                        src={article.imageUrl}
+                        src={article.imageUrl || 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80'}
                         alt={article.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       />
-                      <div className="absolute top-2 left-2">
-                        <Badge variant="gov">{article.categoryName}</Badge>
+                      <div className="absolute top-2.5 left-2.5">
+                        <Badge variant="gov">{article.category?.name || 'Tin tức'}</Badge>
                       </div>
                     </div>
 
-                    <div className="flex-1 flex flex-col justify-between space-y-2">
-                      <div>
-                        <div className="flex items-center gap-3 text-[11px] text-slate-500 mb-1.5">
-                          <span className="flex items-center gap-1 font-mono">
-                            <Calendar className="w-3.5 h-3.5 text-emerald-700" />
-                            {formatDate(article.publishedAt)}
+                    <div className="flex-1 min-w-0 flex flex-col justify-between space-y-2">
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-3 text-xs text-slate-400">
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-3.5 h-3.5" />
+                            {formatDate(article.publishedAt || article.createdAt)}
                           </span>
                           <span>•</span>
                           <span className="flex items-center gap-1">
                             <Eye className="w-3.5 h-3.5" />
-                            {article.views}
+                            {article.views || 0} lượt xem
                           </span>
                         </div>
 
-                        <h2 className="text-base sm:text-lg font-bold text-slate-900 group-hover:text-emerald-800 transition-colors leading-snug">
+                        <h3 className="text-base font-bold text-slate-900 group-hover:text-emerald-800 leading-snug transition-colors line-clamp-2">
                           {article.title}
-                        </h2>
+                        </h3>
 
-                        <p className="text-xs sm:text-sm text-slate-600 line-clamp-2 mt-2 leading-relaxed">
+                        <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
                           {article.summary}
                         </p>
                       </div>
 
-                      <div className="pt-2 flex items-center justify-between text-xs font-bold text-emerald-700">
-                        <span className="text-[11px] font-semibold text-slate-400">Tác giả: {article.author}</span>
-                        <span className="inline-flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                          Đọc tiếp <ChevronRight className="w-4 h-4" />
+                      <div className="pt-2 flex items-center justify-between border-t border-slate-100 text-xs font-semibold">
+                        <span className="text-slate-400">Tác giả: {article.author?.fullName || 'Ban Biên tập MBS'}</span>
+                        <span className="text-emerald-700 group-hover:underline flex items-center gap-1">
+                          Đọc chi tiết <ChevronRight className="w-3.5 h-3.5" />
                         </span>
                       </div>
                     </div>
@@ -191,71 +219,40 @@ export const NewsPage: React.FC<NewsPageProps> = ({ onNavigate, initialCategory 
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="pt-4 flex justify-center">
-                <Pagination
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  onPageChange={(page) => {
-                    setCurrentPage(page);
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                />
-              </div>
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+              />
             )}
           </div>
 
-          {/* Sidebar (4 cols) */}
+          {/* Sidebar */}
           <div className="lg:col-span-4 space-y-6">
-            {/* Tin đọc nhiều nhất widget */}
-            <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm space-y-4">
-              <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-                <Flame className="w-5 h-5 text-red-600" />
-                <h3 className="text-sm font-black text-slate-900 uppercase tracking-wide">
-                  TIN ĐỌC NHIỀU NHẤT
-                </h3>
-              </div>
-
+            {/* Top View Articles */}
+            <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-4">
+              <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider pb-3 border-b-2 border-emerald-700">
+                TIN XEM NHIỀU NHẤT
+              </h3>
               <div className="divide-y divide-slate-100">
                 {topViews.map((item, idx) => (
                   <div
                     key={item.id}
                     onClick={() => onNavigate(`/tin-tuc/${item.slug}`)}
-                    className="py-3 flex items-start gap-3 group cursor-pointer hover:bg-slate-50 rounded-lg px-2 transition-colors"
+                    className="py-3 flex gap-3 group cursor-pointer hover:bg-slate-50 rounded-xl px-1.5 transition-colors"
                   >
-                    <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-800 font-black text-xs flex items-center justify-center shrink-0">
+                    <span className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-800 font-bold text-xs flex items-center justify-center shrink-0">
                       {idx + 1}
                     </span>
                     <div className="space-y-1">
-                      <h4 className="text-xs font-bold text-slate-900 group-hover:text-emerald-800 line-clamp-2 leading-snug">
+                      <h4 className="text-xs font-bold text-slate-900 group-hover:text-emerald-800 line-clamp-2 leading-snug transition-colors">
                         {item.title}
                       </h4>
-                      <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                        <Eye className="w-3 h-3" /> {item.views} lượt xem
+                      <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                        <Eye className="w-3 h-3" /> {item.views || 0} lượt xem
                       </span>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Chuyên mục box */}
-            <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm space-y-3">
-              <h3 className="text-sm font-black text-slate-900 uppercase tracking-wide pb-2 border-b border-slate-100">
-                CHUYÊN MỤC TIN
-              </h3>
-              <div className="space-y-1 text-xs">
-                {NEWS_CATEGORIES.map((cat) => (
-                  <button
-                    key={cat.id}
-                    onClick={() => {
-                      setSelectedCategory(cat.slug);
-                      setCurrentPage(1);
-                    }}
-                    className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-slate-100 text-slate-700 hover:text-emerald-800 transition-colors font-medium cursor-pointer"
-                  >
-                    <span>{cat.name}</span>
-                    <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-                  </button>
                 ))}
               </div>
             </div>

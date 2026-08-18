@@ -74,6 +74,7 @@ export function App() {
     setAuthUser(user);
     setAuthToken(token);
     localStorage.setItem('mbs_admin_token', token);
+    localStorage.setItem('mbs_access_token', token);
     localStorage.setItem('mbs_admin_user', JSON.stringify(user));
     navigate('/admin/dashboard');
   };
@@ -82,6 +83,7 @@ export function App() {
     setAuthUser(null);
     setAuthToken(null);
     localStorage.removeItem('mbs_admin_token');
+    localStorage.removeItem('mbs_access_token');
     localStorage.removeItem('mbs_admin_user');
     navigate('/admin/login');
   };

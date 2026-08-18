@@ -28,58 +28,37 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({ onLoginSuccess, 
     setIsLoading(true);
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+      const apiUrl = import.meta.env.VITE_API_URL || '/api';
       const response = await fetch(`${apiUrl}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username: username.trim(), password }),
       });
 
-      const data = await response.json();
+      const resJson = await response.json();
 
-      if (response.ok && data.success) {
-        showToast('Đăng nhập thành công', `Chào mừng ${data.user.fullName} trở lại hệ thống Quản trị MBS CMS`, 'success');
+      if (response.ok && resJson.data) {
+        const userObj = resJson.data.user;
+        const token = resJson.data.accessToken;
+
+        showToast('Đăng nhập thành công', `Chào mừng cán bộ ${userObj.fullName || userObj.username} từ PostgreSQL DB`, 'success');
         setIsLoading(false);
-        onLoginSuccess(data.user, data.accessToken);
+        onLoginSuccess(userObj, token);
       } else {
         setIsLoading(false);
-        setErrorMessage(data.message || 'Tên đăng nhập hoặc mật khẩu không chính xác.');
+        setErrorMessage(resJson.detail || resJson.message || 'Tài khoản không tồn tại trong CSDL PostgreSQL hoặc mật khẩu không chính xác.');
       }
-    } catch (err) {
-      console.warn('Backend API connection failed, falling back to client-side auth validation:', err);
-      
-      // Fallback for offline mode or dev testing
-      if (
-        (username === 'admin' && password === 'admin123') ||
-        (username === 'khang.tt' && password === 'admin123') ||
-        (username === 'hung.nv' && password === 'admin123') ||
-        (username === 'admin@mbs.hochiminhcity.gov.vn' && password === 'admin123')
-      ) {
-        const mockUser = {
-          id: 'usr-01',
-          username: username === 'khang.tt' ? 'khang.tt' : 'admin',
-          fullName: username === 'khang.tt' ? 'Quản trị viên Lưu Chử Khang' : 'TS. Nguyễn Văn Hùng',
-          email: 'admin@mbs.hochiminhcity.gov.vn',
-          role: 'SUPER_ADMIN',
-          department: 'Ban Giám đốc',
-          avatarUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=120&q=80',
-        };
-        const token = 'mbs_jwt_token_admin_super_access_2026_x88912';
-
-        showToast('Đăng nhập thành công', `Chào mừng ${mockUser.fullName} trở lại hệ thống Quản trị MBS CMS`, 'success');
-        setIsLoading(false);
-        onLoginSuccess(mockUser, token);
-      } else {
-        setIsLoading(false);
-        setErrorMessage('Không thể kết nối đến Server Backend (:4000). Vui lòng kiểm tra lại!');
-      }
+    } catch (err: any) {
+      console.error('Lỗi kết nối xác thực CSDL PostgreSQL:', err);
+      setIsLoading(false);
+      setErrorMessage('Không thể kết nối đến Server Backend PostgreSQL API (:4000). Vui lòng thử lại!');
     }
   };
 
   const handleUseDemoAccount = () => {
-    setUsername('admin');
+    setUsername('khang.tt');
     setPassword('admin123');
     setErrorMessage('');
   };
@@ -118,13 +97,13 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({ onLoginSuccess, 
           {/* Username input */}
           <div className="space-y-1">
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-300">
-              Tên đăng nhập / Email *
+              Tên đăng nhập / Email công vụ *
             </label>
             <div className="relative">
               <User className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
               <input
                 type="text"
-                placeholder="Nhập tên đăng nhập (VD: admin)"
+                placeholder="Nhập tên đăng nhập trong DB (VD: khang.tt)"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all font-medium"
@@ -163,7 +142,7 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({ onLoginSuccess, 
             className="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-950/60 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
           >
             {isLoading ? (
-              <span>Đang xác thực bảo mật...</span>
+              <span>Đang xác thực từ CSDL PostgreSQL...</span>
             ) : (
               <>
                 <span>Đăng nhập Quản trị</span>
@@ -173,24 +152,7 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({ onLoginSuccess, 
           </button>
         </form>
 
-        {/* Demo Account Quick Fill Card */}
-        <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800/80 space-y-2 text-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1">
-              <ShieldCheck className="w-3.5 h-3.5" /> Thử nghiệm hệ thống:
-            </span>
-            <button
-              onClick={handleUseDemoAccount}
-              className="text-[11px] font-bold text-emerald-400 hover:underline cursor-pointer"
-            >
-              [Điền mẫu tự động]
-            </button>
-          </div>
-          <div className="text-[11px] text-slate-400 font-mono space-y-0.5">
-            <p>Tên đăng nhập: <strong className="text-white">admin</strong></p>
-            <p>Mật khẩu: <strong className="text-white">admin123</strong></p>
-          </div>
-        </div>
+
 
         {/* Return to Public Site Link */}
         <div className="text-center pt-2">

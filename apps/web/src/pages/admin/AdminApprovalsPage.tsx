@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   CheckSquare,
   CheckCircle2,
@@ -12,6 +12,7 @@ import {
 import { Button } from '../../components/ui/button';
 import { Modal } from '../../components/ui/modal';
 import { useToast } from '../../components/ui/toast';
+import { fetchApi } from '../../services/api-client';
 
 export interface AdminApprovalsPageProps {
   onNavigate: (path: string) => void;
@@ -19,42 +20,82 @@ export interface AdminApprovalsPageProps {
 
 export const AdminApprovalsPage: React.FC<AdminApprovalsPageProps> = ({ onNavigate }) => {
   const { showToast } = useToast();
+  const [pendingQueue, setPendingQueue] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
   const [selectedPost, setSelectedPost] = useState<any>(null);
   const [reviewNote, setReviewNote] = useState('');
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
 
-  const pendingQueue = [
-    {
-      id: 'appr-01',
-      title: 'Triển khai hệ thống quan trắc tự động liên tục 24/7 tại Khu liên hợp xử lý chất thải Đa Phước',
-      author: 'Kỹ sư Nguyễn Hoàng Nam (Phòng QLMT)',
-      submittedAt: '15/02/2026 09:30',
-      category: 'Khoa học & Công nghệ',
-      status: 'PENDING',
-      originalContent: 'Triển khai hệ thống quan trắc tự động về bụi mịn PM2.5 và H2S tại Khu xử lý rác Đa Phước...',
-      editedContent: 'Triển khai hệ thống quan trắc tự động về bụi mịn PM2.5, H2S, NH3 và VOCs truyền dữ liệu 24/7 về Sở TN&MT và công khai trên Cổng MBS...',
-    },
-    {
-      id: 'appr-02',
-      title: 'Thông báo Kế hoạch điều phối xe vận chuyển rác sinh hoạt dịp cao điểm Tết 2026',
-      author: 'Chuyên viên Trần Thị Mai (Văn phòng Ban)',
-      submittedAt: '14/02/2026 14:20',
-      category: 'Thông báo & Công khai',
-      status: 'PENDING',
-      originalContent: 'Phân luồng xe rác vào bãi chôn lấp...',
-      editedContent: 'Phương án phân luồng giao thông chuyên dụng và điều phối 100% quân số trực 24/24 tiếp nhận rác sinh hoạt tăng 25%...',
-    },
-  ];
+  // Logged in user role
+  const currentUser = (() => {
+    try {
+      const saved = localStorage.getItem('mbs_admin_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  })();
+  const userRole = currentUser?.role || 'CITIZEN';
+  const canApprove = ['SUPER_ADMIN', 'EDITOR_LEAD'].includes(userRole);
 
-  const handleApprove = (postTitle: string) => {
-    showToast('Phê duyệt thành công', `Bài viết "${postTitle}" đã được duyệt và đăng tải công khai!`, 'success');
-    setSelectedPost(null);
+  const loadPendingPosts = async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetchApi<{ data: any[] }>('/v1/posts?status=PENDING_REVIEW');
+      if (res && res.data) {
+        setPendingQueue(res.data);
+      }
+    } catch (err) {
+      console.error('Lỗi tải danh sách bài viết chờ duyệt:', err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleReject = () => {
-    showToast('Đã trả bài viết', 'Nội dung đã được trả lại tác giả kèm ghi chú sửa đổi', 'warning');
-    setIsRejectModalOpen(false);
-    setSelectedPost(null);
+  useEffect(() => {
+    loadPendingPosts();
+  }, []);
+
+  const handleApprove = async (post: any) => {
+    if (!canApprove) {
+      showToast('Không đủ quyền hạn', 'Chỉ Trưởng Ban Biên tập (EDITOR_LEAD) hoặc Super Admin mới có quyền duyệt bài viết.', 'error');
+      return;
+    }
+
+    try {
+      await fetchApi(`/v1/posts/${post.id}/approve`, {
+        method: 'PATCH',
+        body: JSON.stringify({ action: 'APPROVE' }),
+      });
+      showToast('Phê duyệt thành công', `Bài viết "${post.title}" đã được duyệt và đăng tải công khai!`, 'success');
+      setSelectedPost(null);
+      loadPendingPosts();
+    } catch (err: any) {
+      showToast('Lỗi phê duyệt', err.message || 'Không thể phê duyệt bài viết', 'error');
+    }
+  };
+
+  const handleRejectSubmit = async () => {
+    if (!selectedPost) return;
+    if (!canApprove) {
+      showToast('Không đủ quyền hạn', 'Chỉ Trưởng Ban Biên tập mới có quyền trả bài viết.', 'error');
+      return;
+    }
+
+    try {
+      await fetchApi(`/v1/posts/${selectedPost.id}/approve`, {
+        method: 'PATCH',
+        body: JSON.stringify({ action: 'REJECT', reason: reviewNote || 'Chưa đạt yêu cầu biên tập' }),
+      });
+      showToast('Đã trả bài viết', 'Bài viết đã được trả lại tác giả kèm ghi chú yêu cầu chỉnh sửa', 'warning');
+      setIsRejectModalOpen(false);
+      setSelectedPost(null);
+      setReviewNote('');
+      loadPendingPosts();
+    } catch (err: any) {
+      showToast('Lỗi trả bài', err.message || 'Không thể từ chối bài viết', 'error');
+    }
   };
 
   return (
@@ -64,10 +105,10 @@ export const AdminApprovalsPage: React.FC<AdminApprovalsPageProps> = ({ onNaviga
         <div>
           <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-2.5">
             <CheckSquare className="w-6 h-6 text-emerald-400" />
-            Hàng đợi Phê duyệt Tin bài (Diff View Workflow)
+            Hàng đợi Phê duyệt Tin bài (Workflow CSDL PostgreSQL)
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            Giao diện Trưởng Ban biên tập so sánh phiên bản sửa đổi (Diff View) và phê duyệt xuất bản
+            Giao diện Trưởng Ban biên tập xem xét bài viết, kiểm tra nội dung và phê duyệt xuất bản
           </p>
         </div>
       </div>
@@ -79,118 +120,142 @@ export const AdminApprovalsPage: React.FC<AdminApprovalsPageProps> = ({ onNaviga
             <h3 className="text-sm font-bold text-white">Bài viết đang chờ phê duyệt ({pendingQueue.length})</h3>
           </div>
 
-          <div className="divide-y divide-slate-800">
-            {pendingQueue.map((post) => (
-              <div key={post.id} className="p-5 bg-slate-900 hover:bg-slate-850 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-colors">
-                <div className="space-y-1.5 max-w-2xl">
-                  <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded-md border border-emerald-800">
-                    {post.category}
-                  </span>
-                  <h4 className="text-sm font-bold text-white hover:text-emerald-400 transition-colors">
-                    {post.title}
-                  </h4>
-                  <div className="flex items-center gap-4 text-xs text-slate-400">
-                    <span>Tác giả: <strong>{post.author}</strong></span>
-                    <span>•</span>
-                    <span>Gửi duyệt: {post.submittedAt}</span>
+          {isLoading ? (
+            <div className="p-8 text-center text-slate-400 text-xs font-medium">
+              Đang tải hàng đợi phê duyệt bài viết từ CSDL PostgreSQL...
+            </div>
+          ) : pendingQueue.length === 0 ? (
+            <div className="p-8 text-center text-slate-400 text-xs font-medium">
+              Hiện tại không có bài viết nào ở trạng thái chờ duyệt (PENDING_REVIEW).
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-800">
+              {pendingQueue.map((post) => (
+                <div key={post.id} className="p-5 bg-slate-900 hover:bg-slate-850 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-colors">
+                  <div className="space-y-1.5 max-w-2xl">
+                    <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950 px-2.5 py-0.5 rounded-md border border-emerald-800">
+                      {post.category?.name || 'Tin tức'}
+                    </span>
+                    <h4 className="text-sm font-bold text-white hover:text-emerald-400 transition-colors cursor-pointer" onClick={() => setSelectedPost(post)}>
+                      {post.title}
+                    </h4>
+                    <div className="flex items-center gap-4 text-xs text-slate-400">
+                      <span>Tác giả: <strong>{post.author?.fullName || 'Biên tập viên'}</strong></span>
+                      <span>•</span>
+                      <span>Ngày tạo: {new Date(post.createdAt).toLocaleDateString('vi-VN')}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setSelectedPost(post)}
+                      className="gap-1 bg-slate-950 border-slate-800 text-slate-200 text-xs"
+                    >
+                      <Eye className="w-3.5 h-3.5" /> Xem nội dung
+                    </Button>
+                    {canApprove && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          onClick={() => handleApprove(post)}
+                          className="gap-1 text-xs"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Phê duyệt
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setSelectedPost(post);
+                            setIsRejectModalOpen(true);
+                          }}
+                          className="gap-1 text-xs border-rose-800 text-rose-400 hover:bg-rose-950"
+                        >
+                          <XCircle className="w-3.5 h-3.5" /> Từ chối
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
-
-                <div className="flex items-center gap-2">
-                  <Button
-                    onClick={() => setSelectedPost(post)}
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5 text-xs bg-slate-950 border-slate-800 text-slate-200 hover:border-emerald-500"
-                  >
-                    <GitCompare className="w-3.5 h-3.5 text-emerald-400" /> So sánh Diff View
-                  </Button>
-                  <Button
-                    onClick={() => handleApprove(post.title)}
-                    variant="primary"
-                    size="sm"
-                    className="gap-1.5 text-xs"
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Duyệt ngay
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       ) : (
-        /* Side-by-Side Diff Viewer Interface */
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-6 shadow-2xl">
+        /* Diff / Review Detail View */
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-6 shadow-xl">
           <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setSelectedPost(null)}
-                className="p-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-400 hover:text-white"
-              >
-                <ArrowLeft className="w-4 h-4" />
-              </button>
-              <div>
-                <h3 className="text-base font-bold text-white">So sánh nội dung sửa đổi (Diff Viewer)</h3>
-                <p className="text-xs text-slate-400">{selectedPost.title}</p>
-              </div>
-            </div>
-
+            <button
+              onClick={() => setSelectedPost(null)}
+              className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-white transition-colors cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4" /> Quay lại danh sách hàng đợi
+            </button>
             <div className="flex items-center gap-2">
-              <Button onClick={() => setIsRejectModalOpen(true)} variant="danger" size="sm" className="gap-1">
-                <XCircle className="w-3.5 h-3.5" /> Từ chối / Trả bài
-              </Button>
-              <Button onClick={() => handleApprove(selectedPost.title)} variant="primary" size="sm" className="gap-1">
-                <CheckCircle2 className="w-3.5 h-3.5" /> Phê duyệt đăng bài
-              </Button>
+              {canApprove && (
+                <>
+                  <Button size="sm" variant="primary" onClick={() => handleApprove(selectedPost)} className="gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Phê duyệt & Xuất bản ngay
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setIsRejectModalOpen(true)} className="gap-1 border-rose-800 text-rose-400">
+                    <XCircle className="w-3.5 h-3.5" /> Từ chối bài viết
+                  </Button>
+                </>
+              )}
             </div>
           </div>
 
-          {/* Side-by-Side Comparison Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Left: Original Version */}
-            <div className="space-y-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-rose-400 bg-rose-950/60 px-3 py-1 rounded-lg border border-rose-900 block">
-                Phiên bản gốc (Original)
-              </span>
-              <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 text-xs font-mono text-slate-400 min-h-[240px] leading-relaxed">
-                {selectedPost.originalContent}
-              </div>
+          <div className="space-y-4">
+            <h2 className="text-xl font-bold text-white">{selectedPost.title}</h2>
+            <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 text-xs text-slate-300 space-y-2">
+              <p><strong>Tác giả:</strong> {selectedPost.author?.fullName || 'Biên tập viên'}</p>
+              <p><strong>Tóm tắt:</strong> {selectedPost.summary}</p>
+              <p><strong>Chuyên mục:</strong> {selectedPost.category?.name || 'Chưa phân loại'}</p>
             </div>
 
-            {/* Right: Edited Version */}
-            <div className="space-y-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 bg-emerald-950/60 px-3 py-1 rounded-lg border border-emerald-900 block">
-                Phiên bản cập nhật mới (Proposed Edit)
-              </span>
-              <div className="p-4 bg-slate-950 rounded-xl border border-emerald-800/60 text-xs font-mono text-emerald-300 min-h-[240px] leading-relaxed">
-                {selectedPost.editedContent}
-              </div>
+            <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
+              <h3 className="text-xs font-bold uppercase text-slate-400">Nội dung chi tiết:</h3>
+              <div
+                className="text-xs text-slate-200 leading-relaxed font-sans prose prose-invert max-w-none"
+                dangerouslySetInnerHTML={{ __html: selectedPost.content }}
+              />
             </div>
           </div>
         </div>
       )}
 
-      {/* Reject Modal */}
-      <Modal isOpen={isRejectModalOpen} onClose={() => setIsRejectModalOpen(false)} title="Từ chối & Trả bài viết">
-        <div className="space-y-4 text-xs">
-          <p className="text-slate-600">Nhập ghi chú chi tiết lý do từ chối để tác giả tiến hành sửa đổi:</p>
-          <textarea
-            rows={4}
-            placeholder="Ví dụ: Cần bổ sung thêm thông số kỹ thuật về chỉ số nước rỉ rác..."
-            value={reviewNote}
-            onChange={(e) => setReviewNote(e.target.value)}
-            className="w-full border border-slate-300 rounded-xl p-3 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-          />
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" size="sm" onClick={() => setIsRejectModalOpen(false)}>
-              Hủy
-            </Button>
-            <Button variant="danger" size="sm" onClick={handleReject}>
-              Xác nhận trả bài
-            </Button>
+      {/* Modal từ chối bài viết */}
+      {isRejectModalOpen && (
+        <Modal
+          isOpen={isRejectModalOpen}
+          onClose={() => setIsRejectModalOpen(false)}
+          title="Từ chối & Trả bài viết về Biên tập viên"
+        >
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-400 mb-2">Ghi chú lý do yêu cầu chỉnh sửa *</label>
+              <textarea
+                rows={4}
+                placeholder="Nhập lý do từ chối hoặc yêu cầu bổ sung thông tin..."
+                value={reviewNote}
+                onChange={(e) => setReviewNote(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-rose-500"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setIsRejectModalOpen(false)}>
+                Hủy
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleRejectSubmit} className="border-rose-800 text-rose-400 bg-rose-950">
+                Xác nhận trả bài
+              </Button>
+            </div>
           </div>
-        </div>
-      </Modal>
+        </Modal>
+      )}
     </div>
   );
 };

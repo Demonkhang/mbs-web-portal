@@ -8,21 +8,27 @@ datasource db {
 }
 
 enum Role {
+  SUPER_ADMIN
   ADMIN
+  EDITOR_LEAD
   EDITOR
   OFFICER
   CITIZEN
+  ENTERPRISE
 }
 
 enum PostStatus {
   DRAFT
+  PENDING_REVIEW
   PENDING_APPROVAL
   PUBLISHED
+  REJECTED
   ARCHIVED
 }
 
 enum SubmissionStatus {
   TIEP_NHAN
+  DANG_XU_LY
   THAM_DINH
   YEU_CAU_BO_SUNG
   HOAN_TAT
@@ -33,16 +39,18 @@ model User {
   id           String      @id @default(uuid())
   username     String      @unique
   email        String      @unique
-  passwordHash String
-  fullName     String
+  passwordHash String      @map("password_hash")
+  fullName     String      @map("full_name")
   role         Role        @default(CITIZEN)
   department   String?
-  avatarUrl    String?
-  isActive     Boolean     @default(true)
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  avatarUrl    String?     @map("avatar_url")
+  isActive     Boolean     @default(true) @map("is_active")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
   posts        Post[]
   auditLogs    AuditLog[]
+
+  @@map("users")
 }
 
 model Category {
@@ -50,80 +58,214 @@ model Category {
   name      String
   slug      String   @unique
   posts     Post[]
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("categories")
 }
 
 model Post {
-  id              String     @id @default(uuid())
-  slug            String     @unique
+  id              String        @id @default(uuid())
+  slug            String        @unique
   title           String
   summary         String
-  content         String     @db.Text
-  categoryId      String
-  category        Category   @relation(fields: [categoryId], references: [id])
-  authorId        String
-  author          User       @relation(fields: [authorId], references: [id])
-  views           Int        @default(0)
-  imageUrl        String
-  imageCaption    String?
-  isFeatured      Boolean    @default(false)
-  isSpotlight     Boolean    @default(false)
+  content         String        @db.Text
+  categoryId      String        @map("category_id")
+  category        Category      @relation(fields: [categoryId], references: [id])
+  authorId        String        @map("author_id")
+  author          User          @relation(fields: [authorId], references: [id])
+  views           Int           @default(0)
+  imageUrl        String        @map("image_url")
+  imageCaption    String?       @map("image_caption")
+  isFeatured      Boolean       @default(false) @map("is_featured")
+  isSpotlight     Boolean       @default(false) @map("is_spotlight")
   tags            String[]
-  status          PostStatus @default(DRAFT)
-  publishedAt     DateTime?
-  metaTitle       String?
-  metaDescription String?
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  status          PostStatus    @default(DRAFT)
+  rejectionReason String?       @map("rejection_reason")
+  publishedAt     DateTime?     @map("published_at")
+  metaTitle       String?       @map("meta_title")
+  metaDescription String?       @map("meta_description")
+  isDeleted       Boolean       @default(false) @map("is_deleted")
+  deletedAt       DateTime?     @map("deleted_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  history         PostHistory[]
+
+  @@map("posts")
+}
+
+model PostHistory {
+  id          String   @id @default(uuid())
+  postId      String   @map("post_id")
+  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  version     Int
+  title       String
+  summary     String
+  content     String   @db.Text
+  updatedById String   @map("updated_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("post_histories")
 }
 
 model LegalDocument {
-  id              String   @id @default(uuid())
-  code            String   @unique
-  title           String
-  docType         String
-  issuingAgency   String
-  signer          String
-  issueDate       DateTime
-  effectiveDate   DateTime
-  expirationDate  DateTime?
-  status          String
-  domain          String
-  fileSize        String
-  fileUrl         String?
-  downloadsCount  Int      @default(0)
-  viewsCount      Int      @default(0)
-  fullText        String   @db.Text
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String    @id @default(uuid())
+  code           String    @unique
+  title          String
+  docType        String    @map("doc_type")
+  issuingAgency  String    @map("issuing_agency")
+  signer         String
+  issueDate      DateTime  @map("issue_date")
+  effectiveDate  DateTime  @map("effective_date")
+  expirationDate DateTime? @map("expiration_date")
+  status         String
+  domain         String
+  fileSize       String    @map("file_size")
+  fileUrl        String?   @map("file_url")
+  downloadsCount Int       @default(0) @map("downloads_count")
+  viewsCount     Int       @default(0) @map("views_count")
+  fullText       String    @db.Text @map("full_text")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@map("legal_documents")
 }
 
 model PublicServiceSubmission {
   id              String           @id @default(uuid())
-  trackingCode    String           @unique
-  serviceName     String
-  applicantName   String
-  applicantPhone  String
-  applicantEmail  String
-  submissionDate  DateTime         @default(now())
-  expectedDate    DateTime
-  currentStep     Int              @default(1)
+  trackingCode    String           @unique @map("tracking_code")
+  serviceName     String           @map("service_name")
+  applicantName   String           @map("applicant_name")
+  applicantPhone  String           @map("applicant_phone")
+  applicantEmail  String           @map("applicant_email")
+  submissionDate  DateTime         @default(now()) @map("submission_date")
+  expectedDate    DateTime         @map("expected_date")
+  currentStep     Int              @default(1) @map("current_step")
   status          SubmissionStatus @default(TIEP_NHAN)
-  statusText      String
-  assignedOfficer String?
+  statusText      String           @map("status_text")
+  assignedOfficer String?          @map("assigned_officer")
   department      String
+  formData        String?          @db.Text @map("form_data")
   notes           String?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+
+  @@map("public_service_submissions")
+}
+
+model EnvironmentalFeedback {
+  id          String   @id @default(uuid())
+  ticketCode  String   @unique @map("ticket_code")
+  title       String
+  senderName  String   @map("sender_name")
+  senderPhone String   @map("sender_phone")
+  location    String?  @db.Text
+  photoUrl    String?  @map("photo_url") @db.Text
+  status      String   @default("da-tiep-nhan")
+  statusText  String?  @map("status_text") @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("environmental_feedbacks")
+}
+
+model Inquiry {
+  id           String    @id @default(uuid())
+  title        String
+  content      String    @db.Text
+  fullName     String    @map("full_name")
+  email        String
+  phone        String
+  latitude     Float?
+  longitude    Float?
+  attachments  String[]
+  replyContent String?   @db.Text @map("reply_content")
+  repliedBy    String?   @map("replied_by")
+  repliedAt    DateTime? @map("replied_at")
+  isPublic     Boolean   @default(false) @map("is_public")
+  status       String    @default("PENDING")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@map("inquiries")
+}
+
+model Faq {
+  id          String   @id @default(uuid())
+  question    String
+  answer      String   @db.Text
+  category    String
+  order       Int      @default(0)
+  isPublished Boolean  @default(true) @map("is_published")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("faqs")
+}
+
+model Form {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  title       String
+  description String?
+  schemaJson  String   @db.Text @map("schema_json")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("forms")
+}
+
+model Poll {
+  id          String     @id @default(uuid())
+  title       String
+  description String?
+  options     String     @db.Text
+  startDate   DateTime   @map("start_date")
+  endDate     DateTime   @map("end_date")
+  isActive    Boolean    @default(true) @map("is_active")
+  votesCount  Int        @default(0) @map("votes_count")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  votes       PollVote[]
+
+  @@map("polls")
+}
+
+model PollVote {
+  id          String   @id @default(uuid())
+  pollId      String   @map("poll_id")
+  poll        Poll     @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  optionIndex Int      @map("option_index")
+  ipAddress   String   @map("ip_address")
+  userId      String?  @map("user_id")
+  votedAt     DateTime @default(now()) @map("voted_at")
+
+  @@map("poll_votes")
+}
+
+model WeeklySchedule {
+  id         String   @id @default(uuid())
+  weekNumber Int      @map("week_number")
+  year       Int
+  dayOfWeek  String   @map("day_of_week")
+  date       DateTime
+  timeSlot   String   @map("time_slot")
+  eventTitle String   @map("event_title")
+  leaderName String   @map("leader_name")
+  location   String
+  attendees  String?
+  isPublic   Boolean  @default(true) @map("is_public")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("weekly_schedules")
 }
 
 model AuditLog {
   id        String   @id @default(uuid())
   action    String
   module    String
-  userId    String?
+  userId    String?  @map("user_id")
   user      User?    @relation(fields: [userId], references: [id])
-  ipAddress String?
+  ipAddress String?  @map("ip_address")
   details   String?  @db.Text
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("audit_logs")
 }

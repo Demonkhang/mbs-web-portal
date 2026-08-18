@@ -57,16 +57,16 @@ export const NAV_LINKS = [
       { label: 'Kế hoạch & Quy hoạch MBS', href: '/van-ban?domain=Quản lý chất thải rắn' },
     ]
   },
-  {
-    label: 'Dịch vụ công',
-    href: '/dich-vu-cong',
-    children: [
-      { label: 'Dịch vụ công trực tuyến', href: '/dich-vu-cong' },
-      { label: 'Tra cứu tiến độ hồ sơ', href: '/dich-vu-cong#tra-cuu' },
-      { label: 'Hướng dẫn nộp hồ sơ', href: '/dich-vu-cong#huong-dan' },
-      { label: 'Biểu mẫu hành chính', href: '/dich-vu-cong#bieu-mau' },
-    ]
-  },
+  // {
+  //   label: 'Dịch vụ công',
+  //   href: '/dich-vu-cong',
+  //   children: [
+  //     { label: 'Dịch vụ công trực tuyến', href: '/dich-vu-cong' },
+  //     { label: 'Tra cứu tiến độ hồ sơ', href: '/dich-vu-cong#tra-cuu' },
+  //     { label: 'Hướng dẫn nộp hồ sơ', href: '/dich-vu-cong#huong-dan' },
+  //     { label: 'Biểu mẫu hành chính', href: '/dich-vu-cong#bieu-mau' },
+  //   ]
+  // },
   { label: 'Lịch công tác', href: '/lich-cong-tac' },
   { label: 'Phản ánh môi trường', href: '/phan-anh' },
   { label: 'Hỏi đáp & FAQ', href: '/hoi-dap' },

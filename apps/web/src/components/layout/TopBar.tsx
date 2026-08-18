@@ -84,11 +84,7 @@ export const TopBar: React.FC<TopBarProps> = ({
 
           <div className="h-3 w-px bg-emerald-800 hidden md:block"></div>
 
-          {/* USD/VND */}
-          <div className="hidden md:flex items-center gap-1 whitespace-nowrap text-emerald-200" title="Tỷ giá trung tâm">
-            <DollarSign className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-            <span>USD: <strong>25.450</strong></span>
-          </div>
+
         </div>
 
         {/* Right: Accessibility Controls & Language */}

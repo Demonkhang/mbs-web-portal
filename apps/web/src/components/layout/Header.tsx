@@ -81,7 +81,7 @@ export const Header: React.FC<HeaderProps> = ({ currentPath, onNavigate, isHighC
           {/* Text Branding */}
           <div className="flex flex-col">
             <span className="text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-slate-500 group-hover:text-emerald-700 transition-colors">
-              ỦY BAN NHÂN DÂN THÀNH PHỐ HỒ CHÍ MINH
+              SỞ NÔNG NGHIỆP VÀ MÔI TRƯỜNG
             </span>
             <h1 className="text-base sm:text-lg md:text-xl font-extrabold text-emerald-900 leading-tight tracking-tight uppercase group-hover:text-emerald-700 transition-colors">
               BAN QUẢN LÝ CÁC KHU LIÊN HỢP XỬ LÝ CHẤT THẢI

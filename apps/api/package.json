@@ -12,8 +12,10 @@
     "@mbs/security-utils": "*",
     "@mbs/types": "*",
     "@mbs/validation": "*",
+    "@types/multer": "^2.2.0",
     "dotenv": "^17.2.3",
-    "express": "^4.21.2"
+    "express": "^4.21.2",
+    "multer": "^2.2.0"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
