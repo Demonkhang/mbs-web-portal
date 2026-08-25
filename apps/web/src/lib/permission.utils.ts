@@ -82,6 +82,7 @@ export function getAllowedAdminRoutes(role: UserRole | string): string[] {
         '/admin/schedules',
         '/admin/organization',
         '/admin/users',
+        '/admin/roles',
         '/admin/audit-logs',
       ];
 
@@ -122,11 +123,47 @@ export function getAllowedAdminRoutes(role: UserRole | string): string[] {
 }
 
 /**
- * Check if a role is permitted to visit a specific path
+ * Map each Admin path to its required Permission Code
  */
-export function isRouteAllowed(role: UserRole | string, path: string): boolean {
+export const ROUTE_PERMISSION_MAP: Record<string, string> = {
+  '/admin/dashboard': 'dashboard:view',
+  '/admin/analytics/reports': 'audit:view',
+  '/admin/posts': 'posts:view',
+  '/admin/posts/new': 'posts:create',
+  '/admin/approvals': 'posts:approve',
+  '/admin/categories': 'categories:manage',
+  '/admin/documents': 'documents:view',
+  '/admin/media': 'media:upload',
+  '/admin/submissions': 'submissions:view',
+  '/admin/inquiries/feedback': 'inquiries:view',
+  '/admin/inquiries/faq': 'faqs:manage',
+  '/admin/schedules': 'schedules:manage',
+  '/admin/organization': 'users:view',
+  '/admin/users': 'users:view',
+  '/admin/roles': 'roles:manage',
+  '/admin/audit-logs': 'audit:view',
+};
+
+/**
+ * Check if a role/user is permitted to visit a specific path
+ */
+export function isRouteAllowed(role: UserRole | string, path: string, userPermissions?: string[]): boolean {
+  if (role === 'SUPER_ADMIN') return true;
+
+  // Dynamic permission check if user permissions matrix array is present
+  if (userPermissions && userPermissions.length > 0) {
+    // Normalize path to base route (e.g. /admin/posts/123/edit -> /admin/posts)
+    const baseRoute = Object.keys(ROUTE_PERMISSION_MAP).find(
+      (r) => path === r || path.startsWith(r + '/')
+    ) || path;
+
+    const requiredPerm = ROUTE_PERMISSION_MAP[baseRoute];
+    if (!requiredPerm || requiredPerm === 'dashboard:view') return true;
+    return userPermissions.includes(requiredPerm);
+  }
+
+  // Fallback to static role definitions
   const allowed = getAllowedAdminRoutes(role);
-  // Match prefix or exact
   return allowed.some((r) => path === r || path.startsWith(r + '/'));
 }
 
@@ -135,8 +172,26 @@ export function isRouteAllowed(role: UserRole | string, path: string): boolean {
  */
 export function hasPermission(
   role: UserRole | string,
-  action: 'manage_users' | 'publish_posts' | 'write_posts' | 'delete_posts' | 'process_submissions' | 'manage_forms' | 'respond_feedback' | 'view_audit_logs'
+  action: 'manage_users' | 'publish_posts' | 'write_posts' | 'delete_posts' | 'process_submissions' | 'manage_forms' | 'respond_feedback' | 'view_audit_logs',
+  userPermissions?: string[]
 ): boolean {
+  if (role === 'SUPER_ADMIN') return true;
+
+  if (userPermissions && userPermissions.length > 0) {
+    const actionCodeMap: Record<string, string> = {
+      manage_users: 'users:view',
+      view_audit_logs: 'audit:view',
+      manage_forms: 'forms:manage',
+      delete_posts: 'posts:delete',
+      publish_posts: 'posts:approve',
+      write_posts: 'posts:create',
+      process_submissions: 'submissions:process',
+      respond_feedback: 'inquiries:reply',
+    };
+    const code = actionCodeMap[action];
+    if (code) return userPermissions.includes(code);
+  }
+
   switch (action) {
     case 'manage_users':
     case 'view_audit_logs':

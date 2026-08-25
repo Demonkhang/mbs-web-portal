@@ -79,12 +79,8 @@ authRouter.post('/login', RateLimiterMiddleware(10, 60), async (req: Request, re
       });
     }
 
-    // Verify password match
-    const isPasswordValid =
-      user.passwordHash === password ||
-      user.passwordHash === 'admin123' ||
-      user.passwordHash === 'hashed_secret_2026' ||
-      password === 'admin123';
+    // Verify password match strictly
+    const isPasswordValid = user.passwordHash === password;
 
     if (!isPasswordValid) {
       return res.status(401).json({

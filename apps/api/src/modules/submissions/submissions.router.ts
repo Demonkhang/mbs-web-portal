@@ -1,14 +1,14 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '@mbs/database';
 import { sendApiResponse } from '../../common/interceptors/response.interceptor';
-import { JwtAuthGuard, RolesGuard } from '../../common/guards/roles.guard';
+import { JwtAuthGuard, RolesGuard, PermissionGuard } from '../../common/guards/roles.guard';
 import { RateLimiterMiddleware } from '../../common/middleware/rate-limiter.middleware';
 import { generateTrackingCode } from '../../common/utils/tracking-code.generator';
 
 export const submissionsRouter = Router();
 
 // POST /api/v1/forms/builder - Save dynamic JSON Schema form configuration in PostgreSQL DB
-submissionsRouter.post('/forms/builder', JwtAuthGuard, RolesGuard(['SUPER_ADMIN', 'ADMIN']), async (req: Request, res: Response, next: NextFunction) => {
+submissionsRouter.post('/forms/builder', JwtAuthGuard, PermissionGuard('forms:manage'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { code, title, description, schemaJson } = req.body;
 
@@ -46,7 +46,7 @@ submissionsRouter.get('/forms', async (_req: Request, res: Response, next: NextF
 });
 
 // GET /api/v1/submissions - List all submissions from PostgreSQL DB
-submissionsRouter.get('/', JwtAuthGuard, RolesGuard(['OFFICER', 'ADMIN', 'SUPER_ADMIN']), async (_req: Request, res: Response, next: NextFunction) => {
+submissionsRouter.get('/', JwtAuthGuard, PermissionGuard('submissions:view'), async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const submissions = await prisma.publicServiceSubmission.findMany({
       orderBy: { submissionDate: 'desc' },
@@ -150,7 +150,7 @@ submissionsRouter.get('/track/:trackingCode', async (req: Request, res: Response
 });
 
 // PATCH /api/v1/submissions/:id/status - Update processing status in PostgreSQL DB
-submissionsRouter.patch('/:id/status', JwtAuthGuard, RolesGuard(['OFFICER', 'SUPER_ADMIN']), async (req: Request, res: Response, next: NextFunction) => {
+submissionsRouter.patch('/:id/status', JwtAuthGuard, PermissionGuard('submissions:process'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
     const { status, statusText, notes, assignedOfficer } = req.body;

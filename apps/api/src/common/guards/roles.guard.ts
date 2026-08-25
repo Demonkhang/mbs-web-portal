@@ -140,3 +140,47 @@ export function RolesGuard(allowedRoles: Array<'SUPER_ADMIN' | 'ADMIN' | 'EDITOR
     });
   };
 }
+
+export function PermissionGuard(requiredPermission: string) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return res.status(401).json({
+        type: 'https://mbs.hochiminhcity.gov.vn/errors/unauthorized',
+        title: 'Unauthorized',
+        status: 401,
+        detail: 'Yêu cầu đăng nhập trước khi thực hiện thao tác này.',
+        instance: req.originalUrl,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const userRoleCode = req.user.role;
+    // SUPER_ADMIN has full bypass privileges
+    if (userRoleCode === 'SUPER_ADMIN') {
+      return next();
+    }
+
+    try {
+      // Look up permissions array for user's role from PostgreSQL DB
+      const roleDef = await prisma.roleDefinition.findUnique({
+        where: { code: userRoleCode },
+      });
+
+      const permissions = roleDef?.permissions || [];
+      if (permissions.includes(requiredPermission)) {
+        return next();
+      }
+
+      return res.status(403).json({
+        type: 'https://mbs.hochiminhcity.gov.vn/errors/forbidden',
+        title: 'Forbidden Access',
+        status: 403,
+        detail: `Tài khoản '${req.user.username}' (${userRoleCode}) không có quyền '${requiredPermission}' để truy cập tài nguyên này.`,
+        instance: req.originalUrl,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err) {
+      next(err);
+    }
+  };
+}

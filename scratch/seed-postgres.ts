@@ -1,7 +1,90 @@
+import dotenv from 'dotenv';
+import path from 'path';
+
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+dotenv.config();
+
 import { prisma } from '@mbs/database';
 
 async function main() {
-  console.log('🌱 Starting full PostgreSQL DB seeding...');
+  // 0. System Role Definitions & Permissions Matrix
+  console.log(' Seeding system Role Definitions & Permission Matrix...');
+  const ALL_PERMISSIONS = [
+    'users:view', 'users:create', 'users:update', 'users:toggle_status', 'users:delete', 'roles:manage', 'audit:view',
+    'posts:view', 'posts:create', 'posts:update_own', 'posts:update_all', 'posts:review', 'posts:approve', 'posts:delete', 'categories:manage', 'media:upload',
+    'documents:view', 'documents:create', 'documents:update', 'documents:delete',
+    'submissions:view', 'submissions:process', 'submissions:assign', 'forms:manage',
+    'inquiries:view', 'inquiries:reply', 'inquiries:publish',
+    'schedules:manage', 'polls:manage', 'faqs:manage'
+  ];
+
+  await prisma.roleDefinition.upsert({
+    where: { code: 'SUPER_ADMIN' },
+    update: { permissions: ALL_PERMISSIONS },
+    create: {
+      code: 'SUPER_ADMIN',
+      name: 'Quản trị tối cao (Super Admin)',
+      description: 'Toàn quyền điều hành toàn bộ hệ thống, quản lý tài khoản, phân quyền và audit log.',
+      badgeClass: 'bg-rose-950 text-rose-300 border-rose-800',
+      isSystem: true,
+      permissions: ALL_PERMISSIONS,
+    },
+  });
+
+  await prisma.roleDefinition.upsert({
+    where: { code: 'ADMIN' },
+    update: { permissions: ALL_PERMISSIONS },
+    create: {
+      code: 'ADMIN',
+      name: 'Quản trị viên Hệ thống',
+      description: 'Quản lý cán bộ, chuyên mục, biểu mẫu dịch vụ công và phân quyền.',
+      badgeClass: 'bg-purple-950 text-purple-300 border-purple-800',
+      isSystem: true,
+      permissions: ALL_PERMISSIONS.filter((p) => p !== 'roles:manage'),
+    },
+  });
+
+  await prisma.roleDefinition.upsert({
+    where: { code: 'EDITOR_LEAD' },
+    update: {},
+    create: {
+      code: 'EDITOR_LEAD',
+      name: 'Trưởng Ban Biên tập',
+      description: 'Biên tập, phê duyệt xuất bản bài viết, quản lý chuyên mục tin bài và văn bản.',
+      badgeClass: 'bg-emerald-950 text-emerald-300 border-emerald-800',
+      isSystem: true,
+      permissions: [
+        'posts:view', 'posts:create', 'posts:update_own', 'posts:update_all', 'posts:review', 'posts:approve', 'posts:delete',
+        'categories:manage', 'media:upload', 'documents:view', 'documents:create', 'documents:update', 'schedules:manage', 'faqs:manage'
+      ],
+    },
+  });
+
+  await prisma.roleDefinition.upsert({
+    where: { code: 'EDITOR' },
+    update: {},
+    create: {
+      code: 'EDITOR',
+      name: 'Biên tập viên Tin bài',
+      description: 'Soạn thảo tin bài, trình duyệt nội dung bài viết và xem văn bản.',
+      badgeClass: 'bg-sky-950 text-sky-300 border-sky-800',
+      isSystem: true,
+      permissions: ['posts:view', 'posts:create', 'posts:update_own', 'media:upload', 'documents:view'],
+    },
+  });
+
+  await prisma.roleDefinition.upsert({
+    where: { code: 'OFFICER' },
+    update: {},
+    create: {
+      code: 'OFFICER',
+      name: 'Chuyên viên Thụ lý Hồ sơ',
+      description: 'Tiếp nhận, thẩm định hồ sơ Dịch vụ công và phản ánh môi trường của người dân.',
+      badgeClass: 'bg-amber-950 text-amber-300 border-amber-800',
+      isSystem: true,
+      permissions: ['submissions:view', 'submissions:process', 'inquiries:view', 'inquiries:reply', 'documents:view', 'schedules:manage'],
+    },
+  });
 
   // 1. Users
   console.log(' Seeding users...');
@@ -51,6 +134,28 @@ async function main() {
         avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&q=80',
         isActive: true,
       },
+      {
+        id: 'usr-lan-04',
+        username: 'lan.hth',
+        email: 'lan.hth@mbs.hochiminhcity.gov.vn',
+        passwordHash: 'admin123',
+        fullName: 'Hoàng Thị Hương Lan',
+        role: 'EDITOR',
+        department: 'Ban Biên tập',
+        avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=120&q=80',
+        isActive: true,
+      },
+      {
+        id: 'usr-tuan-05',
+        username: 'tuan.ph',
+        email: 'tuan.ph@mbs.hochiminhcity.gov.vn',
+        passwordHash: 'admin123',
+        fullName: 'Phạm Hoàng Tuấn',
+        role: 'OFFICER',
+        department: 'Phòng Thẩm định & Thụ lý',
+        avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&q=80',
+        isActive: true,
+      },
     ],
     skipDuplicates: true,
   });
@@ -69,7 +174,13 @@ async function main() {
     create: { id: 'cat-02', name: 'Hoạt động Ban', slug: 'hoat-dong-ban' },
   });
 
-  // 3. Posts
+  const cat03 = await prisma.category.upsert({
+    where: { slug: 'moi-truong-do-thi' },
+    update: { name: 'Môi trường & Đô thị' },
+    create: { id: 'cat-03', name: 'Môi trường & Đô thị', slug: 'moi-truong-do-thi' },
+  });
+
+  // 3. Posts (Include PENDING_REVIEW & DRAFT for testing approval queue)
   console.log(' Seeding posts...');
   await prisma.post.upsert({
     where: { slug: 'trien-khai-cong-nghe-dot-rac-phat-dien-hien-dai-tai-khu-lhxlct-da-phuoc' },
@@ -108,6 +219,47 @@ async function main() {
       isSpotlight: false,
       status: 'PUBLISHED',
       publishedAt: new Date(),
+    },
+  });
+
+  // Pending Review Posts (Hàng đợi Phê duyệt)
+  await prisma.post.upsert({
+    where: { slug: 'ke-hoach-phan-loai-rac-tai-nguon-tren-dia-ban-tp-hcm-nam-2026' },
+    update: {},
+    create: {
+      id: 'post-03',
+      slug: 'ke-hoach-phan-loai-rac-tai-nguon-tren-dia-ban-tp-hcm-nam-2026',
+      title: 'Kế hoạch mở rộng mô hình phân loại chất thải rắn sinh hoạt tại nguồn năm 2026',
+      summary: 'Tập trung hướng dẫn phân loại 3 nhóm rác chính tại các hộ gia đình và khu dân cư tập trung.',
+      content: '<p>Ban Quản lý MBS phối hợp cùng UBND các quận huyện đẩy mạnh công tác tuyên truyền và cấp phát thùng rác phân loại 3 màu chuẩn quy định.</p>',
+      categoryId: cat03.id,
+      authorId: 'usr-lan-04',
+      views: 120,
+      imageUrl: 'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?auto=format&fit=crop&w=800&q=80',
+      isFeatured: false,
+      isSpotlight: false,
+      status: 'PENDING_REVIEW',
+      publishedAt: null,
+    },
+  });
+
+  await prisma.post.upsert({
+    where: { slug: 'ung-dung-he-thong-thong-tin-dia-ly-gis-quan-ly-khu-lien-hop-rac-thai' },
+    update: {},
+    create: {
+      id: 'post-04',
+      slug: 'ung-dung-he-thong-thong-tin-dia-ly-gis-quan-ly-khu-lien-hop-rac-thai',
+      title: 'Ứng dụng hệ thống thông tin địa lý GIS trong quản lý hạ tầng các Khu liên hợp xử lý chất thải',
+      summary: 'Số hóa toàn bộ sơ đồ hạ tầng thu gom, xử lý nước thải và ô cống chôn lấp rác trên bản đồ số GIS.',
+      content: '<p>Trung tâm Công nghệ thông tin MBS nghiệm thu giai đoạn 1 dự án bản đồ số môi trường chuyên ngành.</p>',
+      categoryId: cat01.id,
+      authorId: 'usr-nam-03',
+      views: 310,
+      imageUrl: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80',
+      isFeatured: false,
+      isSpotlight: false,
+      status: 'PENDING_REVIEW',
+      publishedAt: null,
     },
   });
 
@@ -190,36 +342,65 @@ async function main() {
       applicantPhone: '0908123456',
       applicantEmail: 'contact@moitruongxanh.com.vn',
       expectedDate: new Date(Date.now() + 5 * 24 * 3600 * 1000),
-      currentStep: 2,
-      status: 'DANG_XU_LY',
-      statusText: 'Hồ sơ đang được phòng Thẩm định xem xét chuyên môn',
-      assignedOfficer: 'Kỹ sư Nguyễn Hoàng Nam',
-      department: 'Phòng Thẩm định & Cấp phép',
-      notes: 'Đã nhận đủ hồ sơ bản cứng',
+      currentStep: 1,
+      status: 'TIEP_NHAN',
+      statusText: 'Đã tiếp nhận hồ sơ trực tuyến thành công',
+      assignedOfficer: 'Phạm Hoàng Tuấn',
+      department: 'Bộ phận Một cửa MBS',
+      notes: 'Hồ sơ mới tiếp nhận trực tuyến',
     },
   });
 
-  // 6. Inquiries
-  console.log(' Seeding environmental inquiries...');
-  await prisma.inquiry.createMany({
-    data: [
-      {
-        id: 'inq-01',
-        title: 'Phản ánh tình trạng xả thải nước rỉ rác khu vực lân cận',
-        content: 'Tôi muốn tìm hiểu thêm về lịch kiểm tra giám sát định kỳ chất lượng không khí xung quanh Khu xử lý Đa Phước.',
-        fullName: 'Trần Văn Bình',
-        email: 'tranbinh@gmail.com',
-        phone: '0912345678',
-        latitude: 10.6658,
-        longitude: 106.6622,
-        replyContent: 'Ban Quản lý MBS đã nhận được phản ánh và tổ chức quan trắc định kỳ hàng tuần. Kết quả kiểm tra đạt tiêu chuẩn.',
-        repliedBy: 'TS. Nguyễn Văn Hùng',
-        repliedAt: new Date(),
-        isPublic: true,
-        status: 'RESOLVED',
-      },
-    ],
-    skipDuplicates: true,
+  await prisma.publicServiceSubmission.upsert({
+    where: { trackingCode: 'MBS-2026-00002' },
+    update: {},
+    create: {
+      id: 'sub-02',
+      trackingCode: 'MBS-2026-00002',
+      serviceName: 'Đăng ký kiểm tra định kỳ hệ thống xử lý nước thải',
+      applicantName: 'Công ty Cổ phần Năng lượng Tái tạo Sài Gòn',
+      applicantPhone: '0918999888',
+      applicantEmail: 'info@sg-energy.vn',
+      expectedDate: new Date(Date.now() + 3 * 24 * 3600 * 1000),
+      currentStep: 2,
+      status: 'DANG_XU_LY',
+      statusText: 'Hồ sơ đang được thẩm định báo cáo đánh giá tác động',
+      assignedOfficer: 'Kỹ sư Nguyễn Hoàng Nam',
+      department: 'Phòng Thẩm định & Cấp phép',
+      notes: 'Đã hoàn thành kiểm tra thực địa',
+    },
+  });
+
+  // 6. Environmental Feedback
+  console.log(' Seeding environmental inquiries & feedbacks...');
+  await prisma.environmentalFeedback.upsert({
+    where: { ticketCode: 'MBS-FB-2026-001' },
+    update: {},
+    create: {
+      id: 'fb-01',
+      ticketCode: 'MBS-FB-2026-001',
+      title: 'Phản ánh tình trạng xe chở rác rơi vãi nước rỉ trên đường Huỳnh Tấn Phát',
+      senderName: 'Trần Văn Bình',
+      senderPhone: '0912345678',
+      location: 'Quận 7, TP.Hồ Chí Minh',
+      status: 'da-tiep-nhan',
+      statusText: 'Đã tiếp nhận phản ánh và chuyển Tổ kiểm tra giao thông vận chuyển rác',
+    },
+  });
+
+  await prisma.environmentalFeedback.upsert({
+    where: { ticketCode: 'MBS-FB-2026-002' },
+    update: {},
+    create: {
+      id: 'fb-02',
+      ticketCode: 'MBS-FB-2026-002',
+      title: 'Kiểm tra mùi hôi phát sinh vào ban đêm khu vực lân cận Đa Phước',
+      senderName: 'Lê Thị Mai',
+      senderPhone: '0987654321',
+      location: 'Huyện Bình Chánh, TP.Hồ Chí Minh',
+      status: 'da-tiep-nhan',
+      statusText: 'Chờ kết quả quan trắc không khí tự động',
+    },
   });
 
   // 7. FAQs, Polls, Weekly Schedules

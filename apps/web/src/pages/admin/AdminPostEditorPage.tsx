@@ -109,7 +109,8 @@ export const AdminPostEditorPage: React.FC<AdminPostEditorPageProps> = ({ onNavi
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const res = await fetch('http://localhost:4000/api/v1/media/upload', {
+      const BASE_URL = (import.meta as any).env?.VITE_API_URL || '/api';
+      const res = await fetch(`${BASE_URL}/v1/media/upload`, {
         method: 'POST',
         headers,
         body: formData,

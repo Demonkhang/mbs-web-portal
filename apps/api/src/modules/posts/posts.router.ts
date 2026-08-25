@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '@mbs/database';
 import { sendApiResponse } from '../../common/interceptors/response.interceptor';
 import { redisService } from '../../common/services/redis.service';
-import { JwtAuthGuard, RolesGuard } from '../../common/guards/roles.guard';
+import { JwtAuthGuard, RolesGuard, PermissionGuard } from '../../common/guards/roles.guard';
 import { sanitizeHtmlContent } from '../../common/utils/sanitize.helper';
 
 export const postsRouter = Router();
@@ -100,7 +100,7 @@ postsRouter.get('/:identifier', async (req: Request, res: Response, next: NextFu
 });
 
 // POST /api/v1/posts - Create new article in DRAFT in PostgreSQL DB
-postsRouter.post('/', JwtAuthGuard, RolesGuard(['EDITOR', 'EDITOR_LEAD', 'ADMIN', 'SUPER_ADMIN']), async (req: Request, res: Response, next: NextFunction) => {
+postsRouter.post('/', JwtAuthGuard, PermissionGuard('posts:create'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { title, summary, content, categoryId, imageUrl, imageCaption, isFeatured, isSpotlight, tags, metaTitle, metaDescription } = req.body;
 
@@ -221,7 +221,7 @@ postsRouter.put('/:id', JwtAuthGuard, RolesGuard(['EDITOR', 'EDITOR_LEAD', 'ADMI
 });
 
 // PATCH /api/v1/posts/:id/submit - Submit DRAFT article for approval
-postsRouter.patch('/:id/submit', JwtAuthGuard, RolesGuard(['EDITOR', 'EDITOR_LEAD', 'ADMIN', 'SUPER_ADMIN']), async (req: Request, res: Response, next: NextFunction) => {
+postsRouter.patch('/:id/submit', JwtAuthGuard, PermissionGuard('posts:review'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
     const post = await prisma.post.update({
@@ -236,7 +236,7 @@ postsRouter.patch('/:id/submit', JwtAuthGuard, RolesGuard(['EDITOR', 'EDITOR_LEA
 });
 
 // PATCH /api/v1/posts/:id/approve - Approve or Reject
-postsRouter.patch('/:id/approve', JwtAuthGuard, RolesGuard(['EDITOR_LEAD', 'ADMIN', 'SUPER_ADMIN']), async (req: Request, res: Response, next: NextFunction) => {
+postsRouter.patch('/:id/approve', JwtAuthGuard, PermissionGuard('posts:approve'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
     const { action, reason } = req.body;
@@ -270,7 +270,7 @@ postsRouter.patch('/:id/approve', JwtAuthGuard, RolesGuard(['EDITOR_LEAD', 'ADMI
 });
 
 // DELETE /api/v1/posts/:id - Soft Delete in PostgreSQL DB
-postsRouter.delete('/:id', JwtAuthGuard, RolesGuard(['ADMIN', 'SUPER_ADMIN']), async (req: Request, res: Response, next: NextFunction) => {
+postsRouter.delete('/:id', JwtAuthGuard, PermissionGuard('posts:delete'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
     await prisma.post.update({

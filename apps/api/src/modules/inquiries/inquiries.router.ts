@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '@mbs/database';
 import { sendApiResponse } from '../../common/interceptors/response.interceptor';
-import { JwtAuthGuard, RolesGuard } from '../../common/guards/roles.guard';
+import { JwtAuthGuard, RolesGuard, PermissionGuard } from '../../common/guards/roles.guard';
 import { RateLimiterMiddleware } from '../../common/middleware/rate-limiter.middleware';
 
 export const inquiriesRouter = Router();
@@ -102,7 +102,7 @@ inquiriesRouter.post('/feedback', RateLimiterMiddleware(5, 60), async (req: Requ
 });
 
 // PUT /api/v1/inquiries/feedback/:id - Update environmental feedback status & reply in PostgreSQL DB
-inquiriesRouter.put('/feedback/:id', JwtAuthGuard, RolesGuard(['OFFICER', 'ADMIN', 'SUPER_ADMIN']), async (req: Request, res: Response, next: NextFunction) => {
+inquiriesRouter.put('/feedback/:id', JwtAuthGuard, PermissionGuard('inquiries:reply'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
     const { status, statusText } = req.body;
@@ -122,7 +122,7 @@ inquiriesRouter.put('/feedback/:id', JwtAuthGuard, RolesGuard(['OFFICER', 'ADMIN
 });
 
 // DELETE /api/v1/inquiries/feedback/:id - Delete environmental feedback from PostgreSQL DB
-inquiriesRouter.delete('/feedback/:id', JwtAuthGuard, RolesGuard(['ADMIN', 'SUPER_ADMIN']), async (req: Request, res: Response, next: NextFunction) => {
+inquiriesRouter.delete('/feedback/:id', JwtAuthGuard, PermissionGuard('inquiries:reply'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
     await prisma.environmentalFeedback.delete({ where: { id } });

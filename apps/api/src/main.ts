@@ -18,6 +18,7 @@ import { inquiriesRouter } from './modules/inquiries/inquiries.router';
 import { mediaRouter } from './modules/media/media.router';
 import { utilitiesRouter } from './modules/utilities/utilities.router';
 import { analyticsRouter, auditLogsRouter } from './modules/audit-logs/audit-logs.router';
+import { rolesRouter } from './modules/roles/roles.router';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -76,6 +77,7 @@ app.use('/api/v1/schedules', utilitiesRouter);
 app.use('/api/v1/polls', utilitiesRouter);
 app.use('/api/v1/analytics', analyticsRouter);
 app.use('/api/v1/audit-logs', auditLogsRouter);
+app.use('/api/v1/roles', rolesRouter);
 
 // Legacy route aliases for backwards compatibility
 app.use('/api/auth', authRouter);

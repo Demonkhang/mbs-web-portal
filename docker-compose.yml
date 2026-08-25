@@ -1,42 +1,54 @@
 version: '3.8'
 
 services:
+  # 1. PostgreSQL Database Container (Port 5432)
   postgres:
     image: postgres:16-alpine
     container_name: mbs_postgres
     restart: always
     environment:
-      POSTGRES_USER: mbs_user
-      POSTGRES_PASSWORD: mbs_password
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: mbs_password_2026
       POSTGRES_DB: mbs_db
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d mbs_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
-  redis:
-    image: redis:7-alpine
-    container_name: mbs_redis
+  # 2. Backend Core Express API Container (Port 4000)
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: mbs_api
     restart: always
     ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-
-  meilisearch:
-    image: getmeili/meilisearch:v1.6
-    container_name: mbs_meilisearch
-    restart: always
+      - "4000:4000"
     environment:
-      MEILI_MASTER_KEY: masterKeyMBS2026
-      MEILI_ENV: development
+      PORT: 4000
+      NODE_ENV: development
+      DATABASE_URL: "postgresql://postgres:mbs_password_2026@postgres:5432/mbs_db?schema=public"
+      JWT_SECRET: "mbs-docker-secret-key-2026"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # 3. Frontend Web/CMS React Nginx Container (Port 3001)
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: mbs_web
+    restart: always
     ports:
-      - "7700:7700"
-    volumes:
-      - meili_data:/meili_data
+      - "3001:80"
+    depends_on:
+      - api
 
 volumes:
   postgres_data:
-  redis_data:
-  meili_data:

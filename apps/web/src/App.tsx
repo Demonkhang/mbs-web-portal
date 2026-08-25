@@ -37,6 +37,7 @@ import { AdminMediaPage } from './pages/admin/AdminMediaPage';
 import { AdminOrgStaffPage } from './pages/admin/AdminOrgStaffPage';
 import { AdminSchedulesPollsPage } from './pages/admin/AdminSchedulesPollsPage';
 import { AdminUsersAuditSettingsPage } from './pages/admin/AdminUsersAuditSettingsPage';
+import { AdminRolesPermissionsPage } from './pages/admin/AdminRolesPermissionsPage';
 
 export function App() {
   const [currentPath, setCurrentPath] = useState('/');
@@ -113,7 +114,7 @@ export function App() {
       const postId = currentPath.replace('/admin/posts/', '').replace('/edit', '');
       return <AdminPostEditorPage onNavigate={navigate} postId={postId} />;
     }
-    if (currentPath === '/admin/posts/approvals') {
+    if (currentPath === '/admin/approvals' || currentPath === '/admin/posts/approvals') {
       return <AdminApprovalsPage onNavigate={navigate} />;
     }
     if (currentPath === '/admin/categories') {
@@ -170,8 +171,11 @@ export function App() {
     if (currentPath === '/admin/settings') {
       return <AdminUsersAuditSettingsPage onNavigate={navigate} subTab="settings" />;
     }
-    if (currentPath === '/admin/users' || currentPath === '/admin/roles') {
+    if (currentPath === '/admin/users') {
       return <AdminUsersAuditSettingsPage onNavigate={navigate} subTab="users" />;
+    }
+    if (currentPath === '/admin/roles') {
+      return <AdminRolesPermissionsPage />;
     }
 
     // Default admin dashboard

@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '@mbs/database';
 import { sendApiResponse } from '../../common/interceptors/response.interceptor';
-import { JwtAuthGuard, OptionalJwtAuthGuard, RolesGuard } from '../../common/guards/roles.guard';
+import { JwtAuthGuard, OptionalJwtAuthGuard, RolesGuard, PermissionGuard } from '../../common/guards/roles.guard';
 
 export const usersRouter = Router();
 
@@ -55,18 +55,24 @@ usersRouter.get('/me', OptionalJwtAuthGuard, async (req: Request, res: Response,
       });
     }
 
+    // Get permissions from RoleDefinition
+    const roleDef = await prisma.roleDefinition.findUnique({
+      where: { code: dbUser.role },
+    });
+    const permissionsArray = roleDef?.permissions || [];
+
     const permissionsMatrix = {
-      canPublishPosts: ['SUPER_ADMIN', 'ADMIN', 'EDITOR_LEAD'].includes(dbUser.role),
-      canWritePosts: ['SUPER_ADMIN', 'ADMIN', 'EDITOR_LEAD', 'EDITOR'].includes(dbUser.role),
-      canManageForms: ['SUPER_ADMIN', 'ADMIN'].includes(dbUser.role),
-      canProcessSubmissions: ['SUPER_ADMIN', 'ADMIN', 'OFFICER'].includes(dbUser.role),
-      canViewAuditLogs: ['SUPER_ADMIN', 'ADMIN'].includes(dbUser.role),
-      canManageUsers: ['SUPER_ADMIN', 'ADMIN'].includes(dbUser.role),
+      canPublishPosts: permissionsArray.includes('posts:approve') || ['SUPER_ADMIN', 'ADMIN', 'EDITOR_LEAD'].includes(dbUser.role),
+      canWritePosts: permissionsArray.includes('posts:create') || ['SUPER_ADMIN', 'ADMIN', 'EDITOR_LEAD', 'EDITOR'].includes(dbUser.role),
+      canManageForms: permissionsArray.includes('forms:manage') || ['SUPER_ADMIN', 'ADMIN'].includes(dbUser.role),
+      canProcessSubmissions: permissionsArray.includes('submissions:process') || ['SUPER_ADMIN', 'ADMIN', 'OFFICER'].includes(dbUser.role),
+      canViewAuditLogs: permissionsArray.includes('audit:view') || ['SUPER_ADMIN', 'ADMIN'].includes(dbUser.role),
+      canManageUsers: permissionsArray.includes('users:view') || ['SUPER_ADMIN', 'ADMIN'].includes(dbUser.role),
     };
 
     return sendApiResponse(
       res,
-      { user: dbUser, permissions: permissionsMatrix },
+      { user: { ...dbUser, permissions: permissionsArray }, permissions: permissionsMatrix },
       'Lấy thông tin tài khoản từ CSDL PostgreSQL thành công'
     );
   } catch (error) {
@@ -74,8 +80,8 @@ usersRouter.get('/me', OptionalJwtAuthGuard, async (req: Request, res: Response,
   }
 });
 
-// GET /api/v1/users - List all users (SUPER_ADMIN, ADMIN)
-usersRouter.get('/', JwtAuthGuard, RolesGuard(['SUPER_ADMIN', 'ADMIN']), async (_req: Request, res: Response, next: NextFunction) => {
+// GET /api/v1/users - List all users
+usersRouter.get('/', JwtAuthGuard, PermissionGuard('users:view'), async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const users = await prisma.user.findMany({
       select: {
@@ -98,8 +104,8 @@ usersRouter.get('/', JwtAuthGuard, RolesGuard(['SUPER_ADMIN', 'ADMIN']), async (
   }
 });
 
-// GET /api/v1/users/:id - Get single user by ID (SUPER_ADMIN, ADMIN)
-usersRouter.get('/:id', JwtAuthGuard, RolesGuard(['SUPER_ADMIN', 'ADMIN']), async (req: Request, res: Response, next: NextFunction) => {
+// GET /api/v1/users/:id - Get single user by ID
+usersRouter.get('/:id', JwtAuthGuard, PermissionGuard('users:view'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
     const user = await prisma.user.findUnique({
@@ -134,8 +140,8 @@ usersRouter.get('/:id', JwtAuthGuard, RolesGuard(['SUPER_ADMIN', 'ADMIN']), asyn
   }
 });
 
-// POST /api/v1/users - Create new user (SUPER_ADMIN, ADMIN)
-usersRouter.post('/', JwtAuthGuard, RolesGuard(['SUPER_ADMIN', 'ADMIN']), async (req: Request, res: Response, next: NextFunction) => {
+// POST /api/v1/users - Create new user
+usersRouter.post('/', JwtAuthGuard, PermissionGuard('users:create'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { username, fullName, email, role, department, avatarUrl, password, isActive } = req.body;
 
@@ -199,8 +205,8 @@ usersRouter.post('/', JwtAuthGuard, RolesGuard(['SUPER_ADMIN', 'ADMIN']), async 
   }
 });
 
-// PUT /api/v1/users/:id - Edit/Update existing user (SUPER_ADMIN, ADMIN)
-usersRouter.put('/:id', JwtAuthGuard, RolesGuard(['SUPER_ADMIN', 'ADMIN']), async (req: Request, res: Response, next: NextFunction) => {
+// PUT /api/v1/users/:id - Edit/Update existing user
+usersRouter.put('/:id', JwtAuthGuard, PermissionGuard('users:update'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
     const { fullName, email, role, department, avatarUrl, isActive, password } = req.body;
@@ -236,8 +242,8 @@ usersRouter.put('/:id', JwtAuthGuard, RolesGuard(['SUPER_ADMIN', 'ADMIN']), asyn
   }
 });
 
-// PATCH /api/v1/users/:id/toggle-status - Toggle Active/Inactive status (SUPER_ADMIN, ADMIN)
-usersRouter.patch('/:id/toggle-status', JwtAuthGuard, RolesGuard(['SUPER_ADMIN', 'ADMIN']), async (req: Request, res: Response, next: NextFunction) => {
+// PATCH /api/v1/users/:id/toggle-status - Toggle Active/Inactive status
+usersRouter.patch('/:id/toggle-status', JwtAuthGuard, PermissionGuard('users:toggle_status'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
     const current = await prisma.user.findUnique({ where: { id } });
@@ -264,8 +270,8 @@ usersRouter.patch('/:id/toggle-status', JwtAuthGuard, RolesGuard(['SUPER_ADMIN',
   }
 });
 
-// DELETE /api/v1/users/:id - Delete user from PostgreSQL DB (SUPER_ADMIN only)
-usersRouter.delete('/:id', JwtAuthGuard, RolesGuard(['SUPER_ADMIN']), async (req: Request, res: Response, next: NextFunction) => {
+// DELETE /api/v1/users/:id - Delete user from PostgreSQL DB
+usersRouter.delete('/:id', JwtAuthGuard, PermissionGuard('users:delete'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
     await prisma.user.delete({ where: { id } });

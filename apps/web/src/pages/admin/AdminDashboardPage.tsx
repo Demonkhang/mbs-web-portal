@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Users,
   Eye,
@@ -18,6 +18,7 @@ import {
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { cn } from '../../lib/utils';
+import { fetchApi } from '../../services/api-client';
 
 export interface AdminDashboardPageProps {
   onNavigate: (path: string) => void;
@@ -27,28 +28,68 @@ export interface AdminDashboardPageProps {
 export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({ onNavigate, subTab = 'overview' }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'reports'>(subTab);
   const [reportDepartment, setReportDepartment] = useState('all');
+  const [analyticsData, setAnalyticsData] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    setIsLoading(true);
+    fetchApi<any>('/v1/analytics/overview')
+      .then((res) => {
+        const d = res?.data || res || {};
+        setAnalyticsData(d);
+      })
+      .catch((err) => {
+        console.error('Lỗi tải dữ liệu thống kê từ CSDL:', err);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, []);
 
   const stats = [
-    { label: 'Lượt truy cập hôm nay', value: '1,245', change: '+14.2%', isUp: true, icon: <Eye className="w-5 h-5 text-emerald-400" /> },
-    { label: 'Truy cập tháng này', value: '85,420', change: '+8.7%', isUp: true, icon: <TrendingUp className="w-5 h-5 text-teal-400" /> },
-    { label: 'Người trực tuyến', value: '128', change: 'Thời gian thực', isUp: true, icon: <Users className="w-5 h-5 text-sky-400" /> },
-    { label: 'Hồ sơ DVC đang xử lý', value: '14', change: '2 trễ hạn', isUp: false, icon: <Clock className="w-5 h-5 text-amber-400" /> },
-    { label: 'Phản ánh môi trường mới', value: '3', change: 'Cần chuyển tiếp', isUp: false, icon: <AlertTriangle className="w-5 h-5 text-rose-400" /> },
+    {
+      label: 'Lượt xem bài viết',
+      value: analyticsData?.totalViewsToday ? String(analyticsData.totalViewsToday) : '0',
+      change: 'Tổng lượt xem',
+      isUp: true,
+      icon: <Eye className="w-5 h-5 text-emerald-400" />,
+    },
+    {
+      label: 'Tổng số bài viết',
+      value: analyticsData?.totalPosts !== undefined ? String(analyticsData.totalPosts) : '0',
+      change: 'Đã xuất bản & nháp',
+      isUp: true,
+      icon: <TrendingUp className="w-5 h-5 text-teal-400" />,
+    },
+    {
+      label: 'Văn bản Pháp quy',
+      value: analyticsData?.totalDocuments !== undefined ? String(analyticsData.totalDocuments) : '0',
+      change: 'Kho văn bản DB',
+      isUp: true,
+      icon: <Users className="w-5 h-5 text-sky-400" />,
+    },
+    {
+      label: 'Hồ sơ DVC đang xử lý',
+      value: analyticsData?.pendingSubmissionsCount !== undefined ? String(analyticsData.pendingSubmissionsCount) : '0',
+      change: `${analyticsData?.totalSubmissions || 0} tổng hồ sơ`,
+      isUp: false,
+      icon: <Clock className="w-5 h-5 text-amber-400" />,
+    },
+    {
+      label: 'Phản ánh môi trường mới',
+      value: analyticsData?.pendingFeedbacksCount !== undefined ? String(analyticsData.pendingFeedbacksCount) : '0',
+      change: 'Cần chuyển tiếp',
+      isUp: false,
+      icon: <AlertTriangle className="w-5 h-5 text-rose-400" />,
+    },
   ];
 
-  const topViewedPosts = [
-    { title: 'Triển khai hệ thống giám sát tự động tại Khu Đa Phước', views: '3,420', date: '15/02/2026', category: 'Khoa học công nghệ' },
-    { title: 'Đẩy mạnh chuyển đổi công nghệ đốt rác phát điện', views: '2,180', date: '14/02/2026', category: 'Hoạt động Ban' },
-    { title: 'Thông báo Kế hoạch tiếp nhận và điều phối rác dịp Lễ', views: '1,890', date: '10/02/2026', category: 'Thông báo' },
-    { title: 'Kiểm tra công tác an toàn vệ sinh môi trường mùa khô', views: '1,540', date: '12/02/2026', category: 'Môi trường' },
-  ];
+  const topViewedPosts = analyticsData?.topPosts || [];
+  const reportData = analyticsData?.departmentReports || [];
 
-  const reportData = [
-    { dept: 'Phòng Quản lý Môi trường', total: 42, completed: 40, processing: 2, rate: '95.2%' },
-    { dept: 'Phòng Kỹ thuật & Công nghệ', total: 28, completed: 27, processing: 1, rate: '96.4%' },
-    { dept: 'Văn phòng Ban (Một cửa)', total: 65, completed: 64, processing: 1, rate: '98.5%' },
-    { dept: 'Chi nhánh Điều hành Đa Phước', total: 110, completed: 108, processing: 2, rate: '98.1%' },
-  ];
+  const filteredReportData = reportDepartment === 'all'
+    ? reportData
+    : reportData.filter((r: any) => r.dept.toLowerCase().includes(reportDepartment.toLowerCase()));
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
@@ -259,7 +300,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({ onNaviga
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {reportData.map((row, i) => (
+                {filteredReportData.map((row: any, i: number) => (
                   <tr key={i} className="hover:bg-slate-850 transition-colors">
                     <td className="p-4 font-bold text-white">{row.dept}</td>
                     <td className="p-4 text-center font-mono font-bold text-slate-300">{row.total}</td>

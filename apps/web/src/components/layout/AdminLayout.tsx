@@ -22,7 +22,8 @@ import {
   MapPin,
   History,
   ShieldAlert,
-  ArrowLeft
+  ArrowLeft,
+  ShieldCheck
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { fetchApi } from '../../services/api-client';
@@ -46,6 +47,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentPath, onNavigat
     email: string;
     role: UserRole;
     avatarUrl?: string;
+    permissions?: string[];
   }>(() => {
     const saved = typeof window !== 'undefined' ? localStorage.getItem('mbs_admin_user') : null;
     if (saved) {
@@ -57,6 +59,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentPath, onNavigat
             email: parsed.email || 'canbo@mbs.hochiminhcity.gov.vn',
             role: (parsed.role as UserRole) || 'SUPER_ADMIN',
             avatarUrl: parsed.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80',
+            permissions: parsed.permissions || [],
           };
         }
       } catch {}
@@ -66,8 +69,15 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentPath, onNavigat
       email: 'khang.tt@mbs.hochiminhcity.gov.vn',
       role: 'SUPER_ADMIN',
       avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80',
+      permissions: [],
     };
   });
+
+  const [badgeCounts, setBadgeCounts] = useState<{
+    pendingPosts: number;
+    pendingSubmissions: number;
+    pendingFeedbacks: number;
+  }>({ pendingPosts: 0, pendingSubmissions: 0, pendingFeedbacks: 0 });
 
   useEffect(() => {
     // Load logged-in user profile from Backend API GET /api/v1/users/me
@@ -80,17 +90,30 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentPath, onNavigat
             email: u.email || 'canbo@mbs.hochiminhcity.gov.vn',
             role: (u.role as UserRole) || 'SUPER_ADMIN',
             avatarUrl: u.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80',
+            permissions: u.permissions || [],
           };
           setCurrentUser(updated);
           localStorage.setItem('mbs_admin_user', JSON.stringify(u));
         }
       })
       .catch(() => {});
+
+    // Fetch real-time badge counts from PostgreSQL DB via GET /api/v1/analytics/overview
+    fetchApi<any>('/v1/analytics/overview')
+      .then((res) => {
+        const d = res?.data || res || {};
+        setBadgeCounts({
+          pendingPosts: d.pendingPostsCount || 0,
+          pendingSubmissions: d.pendingSubmissionsCount || d.pendingSubmissions || 0,
+          pendingFeedbacks: d.pendingFeedbacksCount || 0,
+        });
+      })
+      .catch(() => {});
   }, []);
 
   const roleMeta = ROLE_DEFINITIONS[currentUser.role] || ROLE_DEFINITIONS.SUPER_ADMIN;
 
-  // Full Menu Sections
+  // Full Menu Sections Restructured into Standard 4 Groups
   const fullMenuSections = [
     {
       title: 'TỔNG QUAN',
@@ -100,44 +123,58 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentPath, onNavigat
       ],
     },
     {
-      title: 'QUẢN LÝ NỘI DUNG & VĂN BẢN',
+      title: 'QUẢN TRỊ HỆ THỐNG & CÁN BỘ',
       items: [
-        { label: 'Quản lý Bài viết', path: '/admin/posts', icon: <FileText className="w-4 h-4" />, badge: '3' },
-        { label: 'Hàng đợi Phê duyệt', path: '/admin/approvals', icon: <FileCheck className="w-4 h-4" /> },
+        { label: 'Quản lý Cán bộ & Tài khoản', path: '/admin/users', icon: <UserCheck className="w-4 h-4" /> },
+        { label: 'Ma trận Phân quyền (RBAC)', path: '/admin/roles', icon: <ShieldCheck className="w-4 h-4" /> },
+        { label: 'Nhật ký & Audit Logs', path: '/admin/audit-logs', icon: <History className="w-4 h-4" /> },
+      ],
+    },
+    {
+      title: 'QUẢN LÝ TIN BÀI & TRUYỀN THÔNG',
+      items: [
+        { label: 'Quản lý Bài viết', path: '/admin/posts', icon: <FileText className="w-4 h-4" /> },
+        {
+          label: 'Hàng đợi Phê duyệt',
+          path: '/admin/approvals',
+          icon: <FileCheck className="w-4 h-4" />,
+          badge: badgeCounts.pendingPosts > 0 ? String(badgeCounts.pendingPosts) : undefined,
+        },
         { label: 'Chuyên mục & Trang tĩnh', path: '/admin/categories', icon: <FolderTree className="w-4 h-4" /> },
-        { label: 'Kho Văn bản Quy phạm', path: '/admin/documents', icon: <FileCheck className="w-4 h-4" /> },
         { label: 'Thư viện Đa phương tiện', path: '/admin/media', icon: <ImageIcon className="w-4 h-4" /> },
       ],
     },
     {
-      title: 'DỊCH VỤ CÔNG & PHẢN ÁNH',
+      title: 'VĂN BẢN PHÁP QUY & CHỈ ĐẠO',
       items: [
-        { label: 'Hồ sơ Dịch vụ công', path: '/admin/submissions', icon: <Inbox className="w-4 h-4" />, badge: '12' },
-        { label: 'Phản ánh Môi trường', path: '/admin/inquiries/feedback', icon: <MapPin className="w-4 h-4" />, badge: '2' },
-        { label: 'Hỏi - Đáp & Form Động', path: '/admin/inquiries/faq', icon: <HelpCircle className="w-4 h-4" /> },
-      ],
-    },
-    {
-      title: 'TỔ CHỨC & HỆ THỐNG',
-      items: [
+        { label: 'Kho Văn bản Quy phạm', path: '/admin/documents', icon: <FileCheck className="w-4 h-4" /> },
+        {
+          label: 'Hồ sơ Dịch vụ công',
+          path: '/admin/submissions',
+          icon: <Inbox className="w-4 h-4" />,
+          badge: badgeCounts.pendingSubmissions > 0 ? String(badgeCounts.pendingSubmissions) : undefined,
+        },
+        {
+          label: 'Phản ánh Môi trường & Ý kiến',
+          path: '/admin/inquiries/feedback',
+          icon: <MapPin className="w-4 h-4" />,
+          badge: badgeCounts.pendingFeedbacks > 0 ? String(badgeCounts.pendingFeedbacks) : undefined,
+        },
         { label: 'Lịch công tác & Khảo sát', path: '/admin/schedules', icon: <Calendar className="w-4 h-4" /> },
-        { label: 'Sơ đồ Tổ chức & Dân bạ', path: '/admin/organization', icon: <Users className="w-4 h-4" /> },
-        { label: 'Người dùng & Phân quyền', path: '/admin/users', icon: <UserCheck className="w-4 h-4" /> },
-        { label: 'Nhật ký & Cấu hình', path: '/admin/audit-logs', icon: <History className="w-4 h-4" /> },
       ],
     },
   ];
 
-  // Filter Sidebar items strictly based on user role permission!
+  // Filter Sidebar items strictly based on user role permission & permissions array!
   const menuSections = fullMenuSections
     .map((section) => ({
       ...section,
-      items: section.items.filter((item) => isRouteAllowed(currentUser.role, item.path)),
+      items: section.items.filter((item) => isRouteAllowed(currentUser.role, item.path, currentUser.permissions)),
     }))
     .filter((section) => section.items.length > 0);
 
   // Check if current route is allowed for this role
-  const isAllowed = isRouteAllowed(currentUser.role, currentPath);
+  const isAllowed = isRouteAllowed(currentUser.role, currentPath, currentUser.permissions);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex font-sans antialiased selection:bg-emerald-500 selection:text-white">

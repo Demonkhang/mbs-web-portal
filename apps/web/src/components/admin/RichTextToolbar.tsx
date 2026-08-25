@@ -72,7 +72,8 @@ export const RichTextToolbar: React.FC<RichTextToolbarProps> = ({ textareaRef, c
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const API_URL = 'http://localhost:4000/api/v1/media/upload';
+      const BASE_URL = (import.meta as any).env?.VITE_API_URL || '/api';
+      const API_URL = `${BASE_URL}/v1/media/upload`;
       const res = await fetch(API_URL, {
         method: 'POST',
         headers,

@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '@mbs/database';
 import { sendApiResponse } from '../../common/interceptors/response.interceptor';
-import { JwtAuthGuard, RolesGuard } from '../../common/guards/roles.guard';
+import { JwtAuthGuard, RolesGuard, PermissionGuard } from '../../common/guards/roles.guard';
 
 export const documentsRouter = Router();
 
@@ -91,7 +91,7 @@ documentsRouter.get('/', async (_req: Request, res: Response, next: NextFunction
 });
 
 // POST /api/v1/documents - Add legal document metadata & attachment to PostgreSQL DB
-documentsRouter.post('/', JwtAuthGuard, RolesGuard(['OFFICER', 'SUPER_ADMIN']), async (req: Request, res: Response, next: NextFunction) => {
+documentsRouter.post('/', JwtAuthGuard, PermissionGuard('documents:create'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { code, title, docType, issuingAgency, signer, issueDate, effectiveDate, expirationDate, status, domain, fileSize, fileUrl, fullText } = req.body;
 
@@ -125,6 +125,32 @@ documentsRouter.post('/', JwtAuthGuard, RolesGuard(['OFFICER', 'SUPER_ADMIN']), 
     });
 
     return sendApiResponse(res, doc, 'Thêm mới văn bản pháp quy vào CSDL PostgreSQL thành công', 201);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PUT /api/v1/documents/:id - Edit document
+documentsRouter.put('/:id', JwtAuthGuard, PermissionGuard('documents:update'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+    const doc = await prisma.legalDocument.update({
+      where: { id },
+      data: updateData,
+    });
+    return sendApiResponse(res, doc, 'Cập nhật văn bản pháp quy thành công');
+  } catch (error) {
+    next(error);
+  }
+});
+
+// DELETE /api/v1/documents/:id - Delete document
+documentsRouter.delete('/:id', JwtAuthGuard, PermissionGuard('documents:delete'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    await prisma.legalDocument.delete({ where: { id } });
+    return sendApiResponse(res, { id, deleted: true }, 'Xóa văn bản pháp quy thành công');
   } catch (error) {
     next(error);
   }

@@ -8,9 +8,10 @@ COPY apps/api/package*.json ./apps/api/
 COPY packages/database/package*.json ./packages/database/
 COPY packages/database/prisma ./packages/database/prisma/
 
-# 2. Copy shared packages and api source code
+# 2. Copy shared packages, scratch scripts and api source code
 COPY packages ./packages
 COPY apps/api ./apps/api
+COPY scratch ./scratch
 
 # 3. Install dependencies inside container
 RUN npm install --ignore-scripts=false
@@ -20,4 +21,4 @@ RUN npx prisma generate --schema=packages/database/prisma/schema.prisma
 
 EXPOSE 4000
 
-CMD ["npx", "tsx", "apps/api/src/main.ts"]
+CMD ["sh", "-c", "npx prisma db push --schema=packages/database/prisma/schema.prisma && npx tsx scratch/seed-postgres.ts && npx tsx apps/api/src/main.ts"]

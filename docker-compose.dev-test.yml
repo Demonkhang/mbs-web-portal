@@ -1,52 +1,52 @@
+# Alias of standard docker-compose.yml for dev testing
+version: '3.8'
+
 services:
-  # 1. Isolated PostgreSQL Database for Docker Testing (Port 5433)
-  postgres-docker:
+  postgres:
     image: postgres:16-alpine
-    container_name: mbs_postgres_test
+    container_name: mbs_postgres
     restart: always
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: Khang1811password_docker
-      POSTGRES_DB: mbs_db_docker
+      POSTGRES_PASSWORD: mbs_password_2026
+      POSTGRES_DB: mbs_db
     ports:
-      - "5433:5432"
+      - "5432:5432"
     volumes:
-      - mbs_postgres_test_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d mbs_db_docker"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d mbs_db"]
       interval: 5s
       timeout: 5s
       retries: 5
 
-  # 2. Isolated Backend Core API Container (Port 4001)
-  api-docker:
+  api:
     build:
       context: .
       dockerfile: Dockerfile.api
-    container_name: mbs_api_test
+    container_name: mbs_api
     restart: always
     ports:
-      - "4001:4000"
+      - "4000:4000"
     environment:
       PORT: 4000
       NODE_ENV: development
-      DATABASE_URL: "postgresql://postgres:Khang1811password_docker@postgres-docker:5432/mbs_db_docker?schema=public"
-      JWT_SECRET: "mbs-docker-isolated-test-secret-2026"
+      DATABASE_URL: "postgresql://postgres:mbs_password_2026@postgres:5432/mbs_db?schema=public"
+      JWT_SECRET: "mbs-docker-secret-key-2026"
     depends_on:
-      postgres-docker:
+      postgres:
         condition: service_healthy
 
-  # 3. Isolated Frontend Web/CMS Container (Port 3001)
-  web-docker:
+  web:
     build:
       context: .
       dockerfile: Dockerfile.web
-    container_name: mbs_web_test
+    container_name: mbs_web
     restart: always
     ports:
       - "3001:80"
     depends_on:
-      - api-docker
+      - api
 
 volumes:
-  mbs_postgres_test_data:
+  postgres_data:
