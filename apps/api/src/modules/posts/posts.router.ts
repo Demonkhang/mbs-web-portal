@@ -7,32 +7,73 @@ import { sanitizeHtmlContent } from '../../common/utils/sanitize.helper';
 
 export const postsRouter = Router();
 
+// Auto-publish overdue scheduled posts helper
+const checkAndPublishScheduledPosts = async () => {
+  try {
+    const overduePosts = await prisma.post.findMany({
+      where: {
+        status: 'SCHEDULED',
+        scheduledPublishAt: { lte: new Date() },
+        isDeleted: false,
+      },
+    });
+
+    for (const p of overduePosts) {
+      await prisma.post.update({
+        where: { id: p.id },
+        data: {
+          status: 'PUBLISHED',
+          publishedAt: p.scheduledPublishAt || new Date(),
+          currentStep: 4,
+        },
+      });
+
+      await prisma.postWorkflowLog.create({
+        data: {
+          postId: p.id,
+          step: 4,
+          stepName: '4. Xuất bản Cổng thông tin',
+          action: 'AUTO_PUBLISH',
+          actorId: p.assignedToId || p.authorId,
+          actorName: p.assignedToName || 'Hệ thống tự động',
+          actorRole: 'SYSTEM',
+          note: `Đã tự động xuất bản công khai theo lịch hẹn: ${p.scheduledPublishAt ? new Date(p.scheduledPublishAt).toLocaleString('vi-VN') : ''}`,
+        },
+      }).catch(() => {});
+    }
+
+    if (overduePosts.length > 0) {
+      redisService.clearPattern('posts:list:');
+    }
+  } catch (err) {
+    console.error('Lỗi tự động xuất bản bài viết hẹn giờ:', err);
+  }
+};
+
 // GET /api/v1/posts - Paginated articles list with Redis caching from PostgreSQL DB
 postsRouter.get('/', OptionalJwtAuthGuard, async (req: Request, res: Response, next: NextFunction) => {
   try {
+    await checkAndPublishScheduledPosts();
+
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
     const categorySlug = req.query.category as string;
     const status = req.query.status as string;
-    const scope = req.query.scope as string; // 'mine' or 'all'
+    const scope = req.query.scope as string; // 'mine', 'assigned', 'all'
     const authorId = req.query.authorId as string;
 
     const whereClause: any = {
       isDeleted: false,
     };
 
-    if (status) {
-      whereClause.status = status as any;
-    }
-
     if (categorySlug) {
       whereClause.category = { slug: categorySlug };
     }
 
-    // Filter by author:
-    // If authorId is explicitly supplied, filter by it.
-    // If scope === 'mine' OR if logged-in user is EDITOR (and hasn't explicitly asked for all), filter by user ID.
-    if (authorId) {
+    // Scope filter:
+    if (scope === 'assigned' && req.user) {
+      whereClause.assignedToId = req.user.id;
+    } else if (authorId) {
       whereClause.authorId = authorId;
     } else if (scope === 'mine' && req.user) {
       whereClause.authorId = req.user.id;
@@ -40,7 +81,33 @@ postsRouter.get('/', OptionalJwtAuthGuard, async (req: Request, res: Response, n
       whereClause.authorId = req.user.id;
     }
 
-    const cacheKey = `posts:list:${categorySlug || 'all'}:${status || 'all'}:${scope || 'default'}:${whereClause.authorId || 'all'}:${page}:${limit}`;
+    // DRAFT PRIVACY & PENDING WORKFLOW FILTER POLICY:
+    if (status === 'DRAFT') {
+      if (req.user) {
+        whereClause.status = 'DRAFT';
+        whereClause.authorId = req.user.id;
+      } else {
+        whereClause.status = 'DRAFT';
+        whereClause.authorId = 'impossible_unauthenticated_author_id';
+      }
+    } else if (status === 'pending' || status === 'PENDING_REVIEW' || status === 'PENDING_APPROVAL') {
+      whereClause.status = { in: ['SUBMITTED', 'IN_EDITING', 'PENDING_APPROVAL', 'PENDING_REVIEW'] };
+    } else if (status && status !== 'all') {
+      whereClause.status = status as any;
+    } else {
+      // Exclude DRAFT posts belonging to other users
+      if (req.user) {
+        whereClause.OR = [
+          { status: { not: 'DRAFT' } },
+          { status: 'DRAFT', authorId: req.user.id },
+        ];
+      } else {
+        whereClause.status = { not: 'DRAFT' };
+      }
+    }
+
+    const currentUserId = req.user?.id || 'guest';
+    const cacheKey = `posts:list:${categorySlug || 'all'}:${status || 'all'}:${scope || 'default'}:${currentUserId}:${whereClause.authorId || 'all'}:${page}:${limit}`;
 
     const cachedData = redisService.get<any>(cacheKey);
     if (cachedData) {
@@ -56,6 +123,10 @@ postsRouter.get('/', OptionalJwtAuthGuard, async (req: Request, res: Response, n
         include: {
           category: { select: { id: true, name: true, slug: true } },
           author: { select: { id: true, fullName: true, avatarUrl: true } },
+          workflowLogs: {
+            take: 1,
+            orderBy: { createdAt: 'desc' },
+          },
         },
       }),
       prisma.post.count({ where: whereClause }),
@@ -70,7 +141,7 @@ postsRouter.get('/', OptionalJwtAuthGuard, async (req: Request, res: Response, n
 });
 
 // GET /api/v1/posts/:identifier - Article details by ID or Slug from PostgreSQL DB
-postsRouter.get('/:identifier', async (req: Request, res: Response, next: NextFunction) => {
+postsRouter.get('/:identifier', OptionalJwtAuthGuard, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { identifier } = req.params;
     const ip = req.ip || '127.0.0.1';
@@ -83,6 +154,7 @@ postsRouter.get('/:identifier', async (req: Request, res: Response, next: NextFu
       include: {
         category: { select: { id: true, name: true, slug: true } },
         author: { select: { id: true, fullName: true, department: true } },
+        workflowLogs: { orderBy: { createdAt: 'asc' } },
       },
     });
 
@@ -95,6 +167,20 @@ postsRouter.get('/:identifier', async (req: Request, res: Response, next: NextFu
         instance: req.originalUrl,
         timestamp: new Date().toISOString(),
       });
+    }
+
+    // Strict Draft Privacy Check: Only the author can view their own draft post
+    if (post.status === 'DRAFT') {
+      if (!req.user || req.user.id !== post.authorId) {
+        return res.status(403).json({
+          type: 'https://mbs.hochiminhcity.gov.vn/errors/forbidden',
+          title: 'Forbidden',
+          status: 403,
+          detail: 'Bản nháp này là riêng tư và chỉ có tác giả tạo ra mới có quyền xem.',
+          instance: req.originalUrl,
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
 
     // Debounce view counter
@@ -113,7 +199,21 @@ postsRouter.get('/:identifier', async (req: Request, res: Response, next: NextFu
   }
 });
 
-// POST /api/v1/posts - Create new article in DRAFT in PostgreSQL DB
+// GET /api/v1/posts/:id/workflow-logs - Audit lineage history logs
+postsRouter.get('/:id/workflow-logs', JwtAuthGuard, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const logs = await prisma.postWorkflowLog.findMany({
+      where: { postId: id },
+      orderBy: { createdAt: 'asc' },
+    });
+    return sendApiResponse(res, logs, 'Lịch sử quy trình 5 bước thành công');
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/v1/posts - Create new article in DRAFT in PostgreSQL DB (Step 1)
 postsRouter.post('/', JwtAuthGuard, PermissionGuard('posts:create'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const {
@@ -149,6 +249,9 @@ postsRouter.post('/', JwtAuthGuard, PermissionGuard('posts:create'), async (req:
         content: sanitizedContent,
         categoryId,
         authorId: req.user!.id,
+        assignedToId: req.user!.id,
+        assignedToName: req.user!.fullName || req.user!.email,
+        currentStep: 1,
         imageUrl: imageUrl || 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80',
         imageCaption,
         isFeatured: isFeatured || false,
@@ -162,6 +265,21 @@ postsRouter.post('/', JwtAuthGuard, PermissionGuard('posts:create'), async (req:
       },
     });
 
+    await prisma.postWorkflowLog.create({
+      data: {
+        postId: post.id,
+        step: 1,
+        stepName: '1. Khởi tạo & Cam kết',
+        action: 'CREATE',
+        actorId: req.user!.id,
+        actorName: req.user!.fullName || req.user!.email,
+        actorRole: req.user!.role,
+        assignedToId: req.user!.id,
+        assignedToName: req.user!.fullName || req.user!.email,
+        note: 'Tác giả tạo bài viết nháp ban đầu',
+      },
+    }).catch(() => {});
+
     await prisma.postHistory.create({
       data: {
         postId: post.id,
@@ -171,7 +289,7 @@ postsRouter.post('/', JwtAuthGuard, PermissionGuard('posts:create'), async (req:
         content: post.content,
         updatedById: req.user!.id,
       },
-    });
+    }).catch(() => {});
 
     redisService.clearPattern('posts:list:');
     return sendApiResponse(res, post, 'Tạo bài viết mới ở trạng thái DRAFT thành công', 201);
@@ -187,7 +305,8 @@ postsRouter.put('/:id', JwtAuthGuard, RolesGuard(['EDITOR', 'EDITOR_LEAD', 'APPR
     const {
       title, summary, content, categoryId, imageUrl, imageCaption,
       isFeatured, isSpotlight, tags, metaTitle, metaDescription, status,
-      isSafetyCommitted, attachments, royaltyScore, royaltyNotes, approvalNotes, unpublishReason
+      isSafetyCommitted, attachments, royaltyScore, royaltyNotes, approvalNotes, unpublishReason,
+      assignedToId, assignedToName
     } = req.body;
 
     const existingPost = await prisma.post.findUnique({ where: { id } });
@@ -202,7 +321,6 @@ postsRouter.put('/:id', JwtAuthGuard, RolesGuard(['EDITOR', 'EDITOR_LEAD', 'APPR
       });
     }
 
-    // Permission check: EDITOR role can only update their own draft/submitted posts
     if (req.user!.role === 'EDITOR' && existingPost.authorId !== req.user!.id) {
       return res.status(403).json({
         type: 'https://mbs.hochiminhcity.gov.vn/errors/forbidden',
@@ -229,7 +347,16 @@ postsRouter.put('/:id', JwtAuthGuard, RolesGuard(['EDITOR', 'EDITOR_LEAD', 'APPR
     if (status) updateData.status = status;
     if (isSafetyCommitted !== undefined) updateData.isSafetyCommitted = Boolean(isSafetyCommitted);
     if (attachments !== undefined) updateData.attachments = attachments;
-    if (royaltyScore !== undefined) updateData.royaltyScore = royaltyScore ? parseInt(royaltyScore) : null;
+    if (assignedToId !== undefined) updateData.assignedToId = assignedToId;
+    if (assignedToName !== undefined) updateData.assignedToName = assignedToName;
+    if (royaltyScore !== undefined) {
+      updateData.royaltyScore = royaltyScore ? parseInt(royaltyScore) : null;
+      if (royaltyScore && ['SUPER_ADMIN', 'ADMIN', 'APPROVER', 'EDITOR_LEAD'].includes(req.user!.role)) {
+        updateData.scoredById = req.user!.id;
+        updateData.scoredByName = req.user!.fullName || req.user!.email || 'Lãnh đạo phê duyệt';
+        updateData.scoredAt = new Date();
+      }
+    }
     if (royaltyNotes !== undefined) updateData.royaltyNotes = royaltyNotes;
     if (approvalNotes !== undefined) updateData.approvalNotes = approvalNotes;
     if (unpublishReason !== undefined) updateData.unpublishReason = unpublishReason;
@@ -243,18 +370,6 @@ postsRouter.put('/:id', JwtAuthGuard, RolesGuard(['EDITOR', 'EDITOR_LEAD', 'APPR
       },
     });
 
-    // Create history entry
-    await prisma.postHistory.create({
-      data: {
-        postId: updatedPost.id,
-        version: Date.now(),
-        title: updatedPost.title,
-        summary: updatedPost.summary,
-        content: updatedPost.content,
-        updatedById: req.user!.id,
-      },
-    }).catch(() => {});
-
     redisService.clearPattern('posts:list:');
     return sendApiResponse(res, updatedPost, 'Cập nhật bài viết thành công');
   } catch (error) {
@@ -262,11 +377,11 @@ postsRouter.put('/:id', JwtAuthGuard, RolesGuard(['EDITOR', 'EDITOR_LEAD', 'APPR
   }
 });
 
-// BƯỚC 1: PATCH /api/v1/posts/:id/submit - Gửi bài từ DRAFT sang SUBMITTED (Bắt buộc cam kết an toàn)
+// BƯỚC 1: PATCH /api/v1/posts/:id/submit - Gửi bài từ DRAFT sang SUBMITTED (Phân công Thư ký Bước 2)
 postsRouter.patch('/:id/submit', JwtAuthGuard, PermissionGuard('posts:create'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const { isSafetyCommitted } = req.body;
+    const { isSafetyCommitted, nextAssigneeId, nextAssigneeName } = req.body;
 
     const existingPost = await prisma.post.findUnique({ where: { id } });
     if (!existingPost) {
@@ -285,13 +400,39 @@ postsRouter.patch('/:id/submit', JwtAuthGuard, PermissionGuard('posts:create'), 
       });
     }
 
+    // Resolve assignee name if not supplied
+    let targetAssigneeName = nextAssigneeName;
+    if (nextAssigneeId && !targetAssigneeName) {
+      const u = await prisma.user.findUnique({ where: { id: nextAssigneeId } });
+      targetAssigneeName = u?.fullName || u?.email || 'Thư ký biên tập';
+    }
+
     const post = await prisma.post.update({
       where: { id },
       data: {
         status: 'SUBMITTED',
         isSafetyCommitted: true,
+        currentStep: 2,
+        assignedToId: nextAssigneeId || req.user!.id,
+        assignedToName: targetAssigneeName || req.user!.fullName || req.user!.email,
       },
     });
+
+    await prisma.postWorkflowLog.create({
+      data: {
+        postId: id,
+        step: 1,
+        stepName: '1. Khởi tạo & Cam kết',
+        action: 'SUBMIT',
+        actorId: req.user!.id,
+        actorName: req.user!.fullName || req.user!.email,
+        actorRole: req.user!.role,
+        assignedToId: nextAssigneeId,
+        assignedToName: targetAssigneeName,
+        note: 'Tác giả đã cam kết bảo mật & chuyển bài viết cho Thư ký biên tập',
+        metadata: { isSafetyCommitted: true },
+      },
+    }).catch(() => {});
 
     redisService.clearPattern('posts:list:');
     return sendApiResponse(res, post, 'Đã gửi biên tập bài viết thành công (SUBMITTED)');
@@ -306,8 +447,29 @@ postsRouter.patch('/:id/start-editing', JwtAuthGuard, PermissionGuard('posts:edi
     const { id } = req.params;
     const post = await prisma.post.update({
       where: { id },
-      data: { status: 'IN_EDITING' },
+      data: {
+        status: 'IN_EDITING',
+        currentStep: 2,
+        assignedToId: req.user!.id,
+        assignedToName: req.user!.fullName || req.user!.email,
+      },
     });
+
+    await prisma.postWorkflowLog.create({
+      data: {
+        postId: id,
+        step: 2,
+        stepName: '2. Thư ký biên tập',
+        action: 'START_EDITING',
+        actorId: req.user!.id,
+        actorName: req.user!.fullName || req.user!.email,
+        actorRole: req.user!.role,
+        assignedToId: req.user!.id,
+        assignedToName: req.user!.fullName || req.user!.email,
+        note: 'Thư ký biên tập đã chính thức tiếp nhận bài viết',
+      },
+    }).catch(() => {});
+
     redisService.clearPattern('posts:list:');
     return sendApiResponse(res, post, 'Thư ký đã tiếp nhận biên tập bài viết (IN_EDITING)');
   } catch (error) {
@@ -319,9 +481,20 @@ postsRouter.patch('/:id/start-editing', JwtAuthGuard, PermissionGuard('posts:edi
 postsRouter.patch('/:id/submit-approval', JwtAuthGuard, PermissionGuard('posts:edit_technical'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const { isFeatured, isSpotlight, categoryId } = req.body;
+    const { isFeatured, isSpotlight, categoryId, nextAssigneeId, nextAssigneeName } = req.body;
 
-    const updateData: any = { status: 'PENDING_APPROVAL' };
+    let targetAssigneeName = nextAssigneeName;
+    if (nextAssigneeId && !targetAssigneeName) {
+      const u = await prisma.user.findUnique({ where: { id: nextAssigneeId } });
+      targetAssigneeName = u?.fullName || u?.email || 'Lãnh đạo phê duyệt';
+    }
+
+    const updateData: any = {
+      status: 'PENDING_APPROVAL',
+      currentStep: 3,
+      assignedToId: nextAssigneeId || req.user!.id,
+      assignedToName: targetAssigneeName || req.user!.fullName || req.user!.email,
+    };
     if (isFeatured !== undefined) updateData.isFeatured = isFeatured;
     if (isSpotlight !== undefined) updateData.isSpotlight = isSpotlight;
     if (categoryId) updateData.categoryId = categoryId;
@@ -331,6 +504,21 @@ postsRouter.patch('/:id/submit-approval', JwtAuthGuard, PermissionGuard('posts:e
       data: updateData,
     });
 
+    await prisma.postWorkflowLog.create({
+      data: {
+        postId: id,
+        step: 2,
+        stepName: '2. Thư ký biên tập',
+        action: 'SUBMIT_APPROVAL',
+        actorId: req.user!.id,
+        actorName: req.user!.fullName || req.user!.email,
+        actorRole: req.user!.role,
+        assignedToId: nextAssigneeId,
+        assignedToName: targetAssigneeName,
+        note: 'Thư ký đã hoàn thành biên tập và trình Lãnh đạo phê duyệt',
+      },
+    }).catch(() => {});
+
     redisService.clearPattern('posts:list:');
     return sendApiResponse(res, post, 'Đã trình Lãnh đạo phê duyệt bài viết (PENDING_APPROVAL)');
   } catch (error) {
@@ -338,82 +526,192 @@ postsRouter.patch('/:id/submit-approval', JwtAuthGuard, PermissionGuard('posts:e
   }
 });
 
-// BƯỚC 3: PATCH /api/v1/posts/:id/approve - Lãnh đạo phê duyệt bài & chấm nhuận bút (PENDING_APPROVAL -> APPROVED hoặc REJECTED)
-postsRouter.patch('/:id/approve', JwtAuthGuard, RolesGuard(['SUPER_ADMIN', 'ADMIN', 'APPROVER', 'EDITOR_LEAD']), async (req: Request, res: Response, next: NextFunction) => {
+// PATCH /api/v1/posts/:id/return - Trả bài viết về cho Tác giả sửa (SUBMITTED/IN_EDITING/PENDING_APPROVAL -> DRAFT)
+postsRouter.patch('/:id/return', JwtAuthGuard, RolesGuard(['SUPER_ADMIN', 'ADMIN', 'APPROVER', 'EDITOR_LEAD']), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const { action, reason, approvalNotes, royaltyScore, royaltyNotes, autoPublish } = req.body;
+    const { reason } = req.body;
 
-    if (!action || !['APPROVE', 'REJECT'].includes(action)) {
+    if (!reason || !reason.trim()) {
       return res.status(400).json({
         type: 'https://mbs.hochiminhcity.gov.vn/errors/bad-request',
         title: 'Bad Request',
         status: 400,
-        detail: 'Hành động phê duyệt phải là APPROVE hoặc REJECT.',
+        detail: 'Vui lòng nhập lý do trả lại bài viết cho tác giả.',
         instance: req.originalUrl,
         timestamp: new Date().toISOString(),
       });
     }
 
-    let targetStatus: any = action === 'APPROVE' ? (autoPublish ? 'PUBLISHED' : 'APPROVED') : 'REJECTED';
+    const existingPost = await prisma.post.findUnique({
+      where: { id },
+      include: { author: true },
+    });
 
-    const updatedPost = await prisma.post.update({
+    const post = await prisma.post.update({
       where: { id },
       data: {
-        status: targetStatus,
-        approvalNotes: approvalNotes || null,
-        royaltyScore: royaltyScore ? parseInt(royaltyScore) : null,
-        royaltyNotes: royaltyNotes || null,
-        rejectionReason: action === 'REJECT' ? reason || 'Chưa đạt yêu cầu biên tập' : null,
-        publishedAt: action === 'APPROVE' ? new Date() : null,
+        status: 'DRAFT',
+        currentStep: 1,
+        assignedToId: existingPost?.authorId,
+        assignedToName: existingPost?.author?.fullName || existingPost?.author?.email,
+        rejectionReason: reason.trim(),
       },
     });
 
-    // Notify author if published
-    if (targetStatus === 'PUBLISHED') {
-      await prisma.auditLog.create({
-        data: {
-          action: 'POST_PUBLISHED',
-          module: 'posts',
-          details: `Bài viết '${updatedPost.title}' đã được duyệt và xuất bản bởi ${req.user!.fullName}`,
-          userId: req.user!.id,
-        },
-      }).catch(() => {});
-    }
+    await prisma.postWorkflowLog.create({
+      data: {
+        postId: id,
+        step: 3,
+        stepName: '3. Lãnh đạo Duyệt & Chấm nhuận bút',
+        action: 'RETURN',
+        actorId: req.user!.id,
+        actorName: req.user!.fullName || req.user!.email,
+        actorRole: req.user!.role,
+        assignedToId: existingPost?.authorId,
+        assignedToName: existingPost?.author?.fullName || existingPost?.author?.email,
+        note: `Trả lại bài viết cho Tác giả chỉnh sửa. Lý do: ${reason.trim()}`,
+      },
+    }).catch(() => {});
 
     redisService.clearPattern('posts:list:');
-    return sendApiResponse(res, updatedPost, action === 'APPROVE' ? 'Lãnh đạo đã phê duyệt bài viết (APPROVED)' : 'Bài viết đã bị từ chối');
+    return sendApiResponse(res, post, 'Đã trả bài viết về cho tác giả chỉnh sửa (DRAFT)');
   } catch (error) {
     next(error);
   }
 });
 
-// BƯỚC 4: PATCH /api/v1/posts/:id/publish - Kích hoạt xuất bản bài viết (APPROVED -> PUBLISHED)
-postsRouter.patch('/:id/publish', JwtAuthGuard, RolesGuard(['SUPER_ADMIN', 'ADMIN', 'APPROVER', 'EDITOR_LEAD']), async (req: Request, res: Response, next: NextFunction) => {
+// BƯỚC 3: PATCH /api/v1/posts/:id/approve - Lãnh đạo phê duyệt bài & chấm nhuận bút (PENDING_APPROVAL -> APPROVED, REJECTED hoặc RETURN)
+postsRouter.patch('/:id/approve', JwtAuthGuard, RolesGuard(['SUPER_ADMIN', 'ADMIN', 'APPROVER', 'EDITOR_LEAD']), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
+    const { action, reason, approvalNotes, royaltyScore, royaltyNotes, autoPublish, nextAssigneeId, nextAssigneeName } = req.body;
+
+    if (!action || !['APPROVE', 'REJECT', 'RETURN'].includes(action)) {
+      return res.status(400).json({
+        type: 'https://mbs.hochiminhcity.gov.vn/errors/bad-request',
+        title: 'Bad Request',
+        status: 400,
+        detail: 'Hành động phê duyệt phải là APPROVE, REJECT hoặc RETURN.',
+        instance: req.originalUrl,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    let targetStatus: any = 'APPROVED';
+    let targetStep = 4;
+
+    if (action === 'APPROVE') {
+      targetStatus = autoPublish ? 'PUBLISHED' : 'APPROVED';
+    } else if (action === 'REJECT') {
+      targetStatus = 'REJECTED';
+      targetStep = 3;
+    } else if (action === 'RETURN') {
+      targetStatus = 'DRAFT';
+      targetStep = 1;
+    }
+
+    let targetAssigneeName = nextAssigneeName;
+    if (nextAssigneeId && !targetAssigneeName) {
+      const u = await prisma.user.findUnique({ where: { id: nextAssigneeId } });
+      targetAssigneeName = u?.fullName || u?.email || 'Cán bộ xuất bản';
+    }
+
     const updatedPost = await prisma.post.update({
       where: { id },
       data: {
-        status: 'PUBLISHED',
-        publishedAt: new Date(),
+        status: targetStatus,
+        currentStep: targetStep,
+        assignedToId: action === 'APPROVE' ? (nextAssigneeId || req.user!.id) : undefined,
+        assignedToName: action === 'APPROVE' ? (targetAssigneeName || req.user!.fullName || req.user!.email) : undefined,
+        approvalNotes: approvalNotes || null,
+        royaltyScore: action === 'APPROVE' ? (royaltyScore ? parseInt(royaltyScore) : null) : undefined,
+        royaltyNotes: action === 'APPROVE' ? (royaltyNotes || null) : undefined,
+        scoredById: action === 'APPROVE' ? req.user!.id : undefined,
+        scoredByName: action === 'APPROVE' ? (req.user!.fullName || req.user!.email || 'Lãnh đạo phê duyệt') : undefined,
+        scoredAt: action === 'APPROVE' ? new Date() : undefined,
+        rejectionReason: (action === 'REJECT' || action === 'RETURN') ? reason || 'Chưa đạt yêu cầu biên tập' : null,
+        publishedAt: action === 'APPROVE' && autoPublish ? new Date() : null,
+      },
+    });
+
+    await prisma.postWorkflowLog.create({
+      data: {
+        postId: id,
+        step: 3,
+        stepName: '3. Lãnh đạo Duyệt & Chấm nhuận bút',
+        action: action,
+        actorId: req.user!.id,
+        actorName: req.user!.fullName || req.user!.email,
+        actorRole: req.user!.role,
+        assignedToId: nextAssigneeId,
+        assignedToName: targetAssigneeName,
+        note: action === 'APPROVE' ? (approvalNotes || 'Lãnh đạo đã phê duyệt bài viết và chấm nhuận bút') : (reason || 'Từ chối/Trả bài'),
+        metadata: action === 'APPROVE' ? { royaltyScore, royaltyNotes, approvalNotes } : { reason },
+      },
+    }).catch(() => {});
+
+    redisService.clearPattern('posts:list:');
+    const msg = action === 'APPROVE' ? 'Lãnh đạo đã phê duyệt bài viết và chấm nhuận bút (APPROVED)' : action === 'RETURN' ? 'Đã trả lại bài viết về cho tác giả chỉnh sửa' : 'Bài viết đã bị từ chối';
+    return sendApiResponse(res, updatedPost, msg);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// BƯỚC 4: PATCH /api/v1/posts/:id/publish - Kích hoạt xuất bản / Hẹn giờ xuất bản bài viết
+postsRouter.patch('/:id/publish', JwtAuthGuard, RolesGuard(['SUPER_ADMIN', 'ADMIN', 'APPROVER', 'EDITOR_LEAD']), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { scheduledPublishAt } = req.body;
+
+    let targetStatus: any = 'PUBLISHED';
+    let isScheduled = false;
+    let scheduledDate: Date | null = null;
+
+    if (scheduledPublishAt) {
+      const parsedDate = new Date(scheduledPublishAt);
+      if (!isNaN(parsedDate.getTime()) && parsedDate > new Date()) {
+        targetStatus = 'SCHEDULED';
+        isScheduled = true;
+        scheduledDate = parsedDate;
+      }
+    }
+
+    const updatedPost = await prisma.post.update({
+      where: { id },
+      data: {
+        status: targetStatus,
+        currentStep: 4,
+        publishedAt: isScheduled ? null : new Date(),
+        scheduledPublishAt: scheduledDate,
       },
       include: {
         author: { select: { id: true, fullName: true, email: true } },
       },
     });
 
-    await prisma.auditLog.create({
+    await prisma.postWorkflowLog.create({
       data: {
-        action: 'POST_PUBLISHED',
-        module: 'posts',
-        details: `Bài viết '${updatedPost.title}' đã xuất bản công khai lên Portal`,
-        userId: req.user!.id,
+        postId: id,
+        step: 4,
+        stepName: '4. Xuất bản Cổng thông tin',
+        action: isScheduled ? 'SCHEDULE_PUBLISH' : 'PUBLISH',
+        actorId: req.user!.id,
+        actorName: req.user!.fullName || req.user!.email,
+        actorRole: req.user!.role,
+        note: isScheduled
+          ? `Đã hẹn giờ xuất bản công khai vào lúc: ${scheduledDate?.toLocaleString('vi-VN')}`
+          : 'Đã xuất bản bài viết công khai ngay trên Portal',
+        metadata: isScheduled ? { scheduledPublishAt } : undefined,
       },
     }).catch(() => {});
 
     redisService.clearPattern('posts:list:');
-    return sendApiResponse(res, updatedPost, 'Đã xuất bản bài viết ra Cổng thông tin (PUBLISHED)');
+    const msg = isScheduled
+      ? `Đã hẹn giờ xuất bản bài viết vào lúc ${scheduledDate?.toLocaleString('vi-VN')}`
+      : 'Đã xuất bản bài viết ra Cổng thông tin (PUBLISHED)';
+    return sendApiResponse(res, updatedPost, msg);
   } catch (error) {
     next(error);
   }
@@ -440,30 +738,23 @@ postsRouter.patch('/:id/unpublish', JwtAuthGuard, RolesGuard(['SUPER_ADMIN', 'AD
       where: { id },
       data: {
         status: 'UNPUBLISHED',
+        currentStep: 5,
         unpublishReason: reason.trim(),
         unpublishedAt: new Date(),
         unpublishedById: req.user!.id,
       },
     });
 
-    // Record in history log
-    await prisma.postHistory.create({
+    await prisma.postWorkflowLog.create({
       data: {
-        postId: updatedPost.id,
-        version: Date.now(),
-        title: `[THU HỒI] ${updatedPost.title}`,
-        summary: `Lý do gỡ bài: ${reason.trim()}`,
-        content: updatedPost.content,
-        updatedById: req.user!.id,
-      },
-    }).catch(() => {});
-
-    await prisma.auditLog.create({
-      data: {
-        action: 'POST_UNPUBLISHED',
-        module: 'posts',
-        details: `Thu hồi khẩn cấp bài viết '${updatedPost.title}'. Lý do: ${reason.trim()}`,
-        userId: req.user!.id,
+        postId: id,
+        step: 5,
+        stepName: '5. Thu hồi khẩn cấp',
+        action: 'UNPUBLISH',
+        actorId: req.user!.id,
+        actorName: req.user!.fullName || req.user!.email,
+        actorRole: req.user!.role,
+        note: `Gỡ bài khẩn cấp. Lý do: ${reason.trim()}`,
       },
     }).catch(() => {});
 

@@ -104,6 +104,28 @@ usersRouter.get('/', JwtAuthGuard, PermissionGuard('users:view'), async (_req: R
   }
 });
 
+// GET /api/v1/users/assignees - List active staff members for workflow assignment dropdown
+usersRouter.get('/assignees', JwtAuthGuard, async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const users = await prisma.user.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        fullName: true,
+        role: true,
+        department: true,
+        avatarUrl: true,
+      },
+      orderBy: { fullName: 'asc' },
+    });
+    return sendApiResponse(res, users, 'Danh sách cán bộ thụ lý từ CSDL');
+  } catch (error) {
+    next(error);
+  }
+});
+
 // GET /api/v1/users/:id - Get single user by ID
 usersRouter.get('/:id', JwtAuthGuard, PermissionGuard('users:view'), async (req: Request, res: Response, next: NextFunction) => {
   try {

@@ -37,12 +37,12 @@ export const AdminApprovalsPage: React.FC<AdminApprovalsPageProps> = ({ onNaviga
     }
   })();
   const userRole = currentUser?.role || 'CITIZEN';
-  const canApprove = ['SUPER_ADMIN', 'EDITOR_LEAD'].includes(userRole);
+  const canApprove = ['SUPER_ADMIN', 'ADMIN', 'APPROVER', 'EDITOR_LEAD'].includes(userRole);
 
   const loadPendingPosts = async () => {
     setIsLoading(true);
     try {
-      const res = await fetchApi<{ data: any[] }>('/v1/posts?status=PENDING_REVIEW');
+      const res = await fetchApi<{ data: any[] }>('/v1/posts?status=pending');
       if (res && res.data) {
         setPendingQueue(res.data);
       }
@@ -59,7 +59,7 @@ export const AdminApprovalsPage: React.FC<AdminApprovalsPageProps> = ({ onNaviga
 
   const handleApprove = async (post: any) => {
     if (!canApprove) {
-      showToast('Không đủ quyền hạn', 'Chỉ Trưởng Ban Biên tập (EDITOR_LEAD) hoặc Super Admin mới có quyền duyệt bài viết.', 'error');
+      showToast('Không đủ quyền hạn', 'Chỉ Lãnh đạo Ban biên tập hoặc Super Admin mới có quyền duyệt bài viết.', 'error');
       return;
     }
 
@@ -68,7 +68,7 @@ export const AdminApprovalsPage: React.FC<AdminApprovalsPageProps> = ({ onNaviga
         method: 'PATCH',
         body: JSON.stringify({ action: 'APPROVE' }),
       });
-      showToast('Phê duyệt thành công', `Bài viết "${post.title}" đã được duyệt và đăng tải công khai!`, 'success');
+      showToast('Phê duyệt thành công', `Bài viết "${post.title}" đã được duyệt và chuyển sang bước Xuất bản!`, 'success');
       setSelectedPost(null);
       loadPendingPosts();
     } catch (err: any) {
@@ -79,7 +79,7 @@ export const AdminApprovalsPage: React.FC<AdminApprovalsPageProps> = ({ onNaviga
   const handleRejectSubmit = async () => {
     if (!selectedPost) return;
     if (!canApprove) {
-      showToast('Không đủ quyền hạn', 'Chỉ Trưởng Ban Biên tập mới có quyền trả bài viết.', 'error');
+      showToast('Không đủ quyền hạn', 'Chỉ Lãnh đạo Ban biên tập mới có quyền trả bài viết.', 'error');
       return;
     }
 
@@ -105,10 +105,10 @@ export const AdminApprovalsPage: React.FC<AdminApprovalsPageProps> = ({ onNaviga
         <div>
           <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-2.5">
             <CheckSquare className="w-6 h-6 text-emerald-400" />
-            Hàng đợi Phê duyệt Tin bài (Workflow CSDL PostgreSQL)
+            Hàng đợi Phê duyệt Tin bài (Luồng 5 bước CSDL PostgreSQL)
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            Giao diện Trưởng Ban biên tập xem xét bài viết, kiểm tra nội dung và phê duyệt xuất bản
+            Giao diện Lãnh đạo Ban biên tập xem xét bài viết, rà soát tiến trình 5 bước và phê duyệt xuất bản
           </p>
         </div>
       </div>
@@ -126,21 +126,37 @@ export const AdminApprovalsPage: React.FC<AdminApprovalsPageProps> = ({ onNaviga
             </div>
           ) : pendingQueue.length === 0 ? (
             <div className="p-8 text-center text-slate-400 text-xs font-medium">
-              Hiện tại không có bài viết nào ở trạng thái chờ duyệt (PENDING_REVIEW).
+              Hiện tại không có bài viết nào trong hàng đợi chờ xử lý phê duyệt.
             </div>
           ) : (
             <div className="divide-y divide-slate-800">
               {pendingQueue.map((post) => (
                 <div key={post.id} className="p-5 bg-slate-900 hover:bg-slate-850 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-colors">
                   <div className="space-y-1.5 max-w-2xl">
-                    <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950 px-2.5 py-0.5 rounded-md border border-emerald-800">
-                      {post.category?.name || 'Tin tức'}
-                    </span>
-                    <h4 className="text-sm font-bold text-white hover:text-emerald-400 transition-colors cursor-pointer" onClick={() => setSelectedPost(post)}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950 px-2.5 py-0.5 rounded-md border border-emerald-800">
+                        {post.category?.name || 'Tin tức'}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                        post.status === 'PENDING_APPROVAL' ? 'bg-amber-950 text-amber-300 border-amber-800' :
+                        post.status === 'IN_EDITING' ? 'bg-purple-950 text-purple-300 border-purple-800' :
+                        'bg-sky-950 text-sky-300 border-sky-800'
+                      }`}>
+                        {post.status === 'PENDING_APPROVAL' ? 'Bước 3: Chờ Lãnh đạo Duyệt' :
+                         post.status === 'IN_EDITING' ? 'Bước 2: Đang Biên tập' : 'Bước 2: Đã gửi Biên tập'}
+                      </span>
+                    </div>
+                    <h4 className="text-sm font-bold text-white hover:text-emerald-400 transition-colors cursor-pointer" onClick={() => onNavigate(`/admin/posts/edit/${post.id}`)}>
                       {post.title}
                     </h4>
                     <div className="flex items-center gap-4 text-xs text-slate-400">
                       <span>Tác giả: <strong>{post.author?.fullName || 'Biên tập viên'}</strong></span>
+                      {post.assignedToName && (
+                        <>
+                          <span>•</span>
+                          <span className="text-amber-300">Phân công: <strong>{post.assignedToName}</strong></span>
+                        </>
+                      )}
                       <span>•</span>
                       <span>Ngày tạo: {new Date(post.createdAt).toLocaleDateString('vi-VN')}</span>
                     </div>
@@ -150,10 +166,10 @@ export const AdminApprovalsPage: React.FC<AdminApprovalsPageProps> = ({ onNaviga
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => setSelectedPost(post)}
-                      className="gap-1 bg-slate-950 border-slate-800 text-slate-200 text-xs"
+                      onClick={() => onNavigate(`/admin/posts/edit/${post.id}`)}
+                      className="gap-1 bg-slate-950 border-slate-800 text-sky-400 hover:text-sky-300 text-xs font-bold"
                     >
-                      <Eye className="w-3.5 h-3.5" /> Xem nội dung
+                      <Eye className="w-3.5 h-3.5" /> Biên tập & Chấm điểm (Bước 5)
                     </Button>
                     {canApprove && (
                       <>
