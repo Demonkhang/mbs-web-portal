@@ -19,6 +19,7 @@ import { mediaRouter } from './modules/media/media.router';
 import { utilitiesRouter } from './modules/utilities/utilities.router';
 import { analyticsRouter, auditLogsRouter } from './modules/audit-logs/audit-logs.router';
 import { rolesRouter } from './modules/roles/roles.router';
+import { pagesRouter } from './modules/pages/pages.router';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -27,8 +28,11 @@ const PORT = process.env.PORT || 4000;
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Serve uploaded static files from local uploads folder
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+import { StorageService } from './common/services/storage.service';
+
+// Serve uploaded static files from configured uploads directory
+app.use('/uploads', express.static(StorageService.getUploadDir()));
+
 
 // Enterprise Security Headers Defense-in-Depth
 app.use((_req, res, next) => {
@@ -78,6 +82,7 @@ app.use('/api/v1/polls', utilitiesRouter);
 app.use('/api/v1/analytics', analyticsRouter);
 app.use('/api/v1/audit-logs', auditLogsRouter);
 app.use('/api/v1/roles', rolesRouter);
+app.use('/api/v1/pages', pagesRouter);
 
 // Legacy route aliases for backwards compatibility
 app.use('/api/auth', authRouter);
@@ -91,6 +96,7 @@ app.use('/api/inquiries', inquiriesRouter);
 app.use('/api/utilities', utilitiesRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/audit-logs', auditLogsRouter);
+app.use('/api/pages', pagesRouter);
 
 // Global Error Exception Handling (RFC 7807 Problem Details)
 app.use(GlobalExceptionFilter);

@@ -7,7 +7,7 @@ export interface AuthenticatedUser {
   username: string;
   fullName: string;
   email: string;
-  role: 'SUPER_ADMIN' | 'ADMIN' | 'EDITOR_LEAD' | 'EDITOR' | 'OFFICER' | 'CITIZEN' | 'ENTERPRISE';
+  role: 'SUPER_ADMIN' | 'ADMIN' | 'APPROVER' | 'EDITOR_LEAD' | 'EDITOR' | 'OFFICER' | 'CITIZEN' | 'ENTERPRISE';
   department?: string;
   jti?: string;
 }
@@ -111,7 +111,7 @@ export async function OptionalJwtAuthGuard(req: Request, _res: Response, next: N
   next();
 }
 
-export function RolesGuard(allowedRoles: Array<'SUPER_ADMIN' | 'ADMIN' | 'EDITOR_LEAD' | 'EDITOR' | 'OFFICER' | 'CITIZEN' | 'ENTERPRISE'>) {
+export function RolesGuard(allowedRoles: Array<'SUPER_ADMIN' | 'ADMIN' | 'APPROVER' | 'EDITOR_LEAD' | 'EDITOR' | 'OFFICER' | 'CITIZEN' | 'ENTERPRISE'>) {
   return (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) {
       return res.status(401).json({

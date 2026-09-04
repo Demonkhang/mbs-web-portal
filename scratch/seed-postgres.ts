@@ -45,16 +45,42 @@ async function main() {
   });
 
   await prisma.roleDefinition.upsert({
+    where: { code: 'APPROVER' },
+    update: {
+      permissions: [
+        'posts:view', 'posts:approve_leadership', 'posts:publish', 'posts:unpublish', 'posts:update_all',
+        'documents:view', 'audit:view'
+      ],
+    },
+    create: {
+      code: 'APPROVER',
+      name: 'Lãnh đạo Phê duyệt (Approver)',
+      description: 'Lãnh đạo Ban biên tập trực tiếp đọc duyệt, chấm điểm nhuận bút và phê duyệt bài viết.',
+      badgeClass: 'bg-amber-950 text-amber-300 border-amber-800',
+      isSystem: true,
+      permissions: [
+        'posts:view', 'posts:approve_leadership', 'posts:publish', 'posts:unpublish', 'posts:update_all',
+        'documents:view', 'audit:view'
+      ],
+    },
+  });
+
+  await prisma.roleDefinition.upsert({
     where: { code: 'EDITOR_LEAD' },
-    update: {},
+    update: {
+      permissions: [
+        'posts:view', 'posts:create', 'posts:edit_technical', 'posts:approve_leadership', 'posts:publish', 'posts:unpublish', 'posts:update_own', 'posts:update_all', 'posts:review', 'posts:approve', 'posts:delete',
+        'categories:manage', 'media:upload', 'documents:view', 'documents:create', 'documents:update', 'schedules:manage', 'faqs:manage'
+      ],
+    },
     create: {
       code: 'EDITOR_LEAD',
-      name: 'Trưởng Ban Biên tập',
-      description: 'Biên tập, phê duyệt xuất bản bài viết, quản lý chuyên mục tin bài và văn bản.',
+      name: 'Thư ký / Trưởng Ban Biên tập',
+      description: 'Biên tập, hiệu đính kỹ thuật bài viết, trình duyệt và xuất bản tin bài.',
       badgeClass: 'bg-emerald-950 text-emerald-300 border-emerald-800',
       isSystem: true,
       permissions: [
-        'posts:view', 'posts:create', 'posts:update_own', 'posts:update_all', 'posts:review', 'posts:approve', 'posts:delete',
+        'posts:view', 'posts:create', 'posts:edit_technical', 'posts:approve_leadership', 'posts:publish', 'posts:unpublish', 'posts:update_own', 'posts:update_all', 'posts:review', 'posts:approve', 'posts:delete',
         'categories:manage', 'media:upload', 'documents:view', 'documents:create', 'documents:update', 'schedules:manage', 'faqs:manage'
       ],
     },

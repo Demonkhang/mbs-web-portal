@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   FileText,
   Plus,
@@ -9,13 +9,15 @@ import {
   Edit,
   Trash2,
   Eye,
-  XCircle
+  XCircle,
+  Save
 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { Modal } from '../../components/ui/modal';
 import { useToast } from '../../components/ui/toast';
 import { fetchApi } from '../../services/api-client';
+import { RichTextToolbar } from '../../components/admin/RichTextToolbar';
 
 export interface AdminPostsPageProps {
   onNavigate: (path: string) => void;
@@ -24,13 +26,33 @@ export interface AdminPostsPageProps {
 
 export const AdminPostsPage: React.FC<AdminPostsPageProps> = ({ onNavigate, subView = 'posts' }) => {
   const { showToast } = useToast();
+  const pageTextareaRef = useRef<HTMLTextAreaElement>(null);
+
   const [currentView, setCurrentView] = useState<'posts' | 'categories' | 'pages'>(subView);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   const [posts, setPosts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [staticPages, setStaticPages] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // Static Page Editing Modal State
+  const [editingStaticPage, setEditingStaticPage] = useState<any | null>(null);
+  const [editPageTitle, setEditPageTitle] = useState('');
+  const [editPageSummary, setEditPageSummary] = useState('');
+  const [editPageContent, setEditPageContent] = useState('');
+  const [isEditPageModalOpen, setIsEditPageModalOpen] = useState(false);
+  const [isSavingPage, setIsSavingPage] = useState(false);
+
+  // Create Static Page Modal State
+  const newPageTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const [isCreatePageModalOpen, setIsCreatePageModalOpen] = useState(false);
+  const [newPageTitle, setNewPageTitle] = useState('');
+  const [newPageSlug, setNewPageSlug] = useState('');
+  const [newPageSummary, setNewPageSummary] = useState('');
+  const [newPageContent, setNewPageContent] = useState('');
+  const [isCreatingPage, setIsCreatingPage] = useState(false);
 
   // Rejection Modal State
   const [rejectingPost, setRejectingPost] = useState<any | null>(null);
@@ -41,7 +63,6 @@ export const AdminPostsPage: React.FC<AdminPostsPageProps> = ({ onNavigate, subV
   const [isAddCatModalOpen, setIsAddCatModalOpen] = useState(false);
   const [newCatName, setNewCatName] = useState('');
 
-  // Logged-in user role
   const currentUser = (() => {
     try {
       const saved = localStorage.getItem('mbs_admin_user');
@@ -52,6 +73,10 @@ export const AdminPostsPage: React.FC<AdminPostsPageProps> = ({ onNavigate, subV
   })();
   const userRole = currentUser?.role || 'CITIZEN';
 
+  const [selectedScope, setSelectedScope] = useState<'mine' | 'all'>(
+    userRole === 'EDITOR' ? 'mine' : 'all'
+  );
+
   const canCreatePost = ['SUPER_ADMIN', 'ADMIN', 'EDITOR_LEAD', 'EDITOR'].includes(userRole);
   const canApprove = ['SUPER_ADMIN', 'ADMIN', 'EDITOR_LEAD'].includes(userRole);
   const canManageCategories = ['SUPER_ADMIN', 'ADMIN', 'EDITOR_LEAD'].includes(userRole);
@@ -61,18 +86,25 @@ export const AdminPostsPage: React.FC<AdminPostsPageProps> = ({ onNavigate, subV
   const loadPosts = async () => {
     setIsLoading(true);
     try {
-      const statusParam =
-        selectedStatus === 'all'
-          ? ''
-          : selectedStatus === 'published'
-          ? 'PUBLISHED'
-          : selectedStatus === 'pending'
-          ? 'PENDING_REVIEW'
-          : selectedStatus === 'rejected'
-          ? 'REJECTED'
-          : 'DRAFT';
+      const params = new URLSearchParams();
+      if (selectedStatus !== 'all') {
+        const statusMap: Record<string, string> = {
+          published: 'PUBLISHED',
+          approved: 'APPROVED',
+          pending_approval: 'PENDING_APPROVAL',
+          pending: 'PENDING_APPROVAL',
+          in_editing: 'IN_EDITING',
+          submitted: 'SUBMITTED',
+          unpublished: 'UNPUBLISHED',
+          rejected: 'REJECTED',
+          draft: 'DRAFT',
+        };
+        const statusParam = statusMap[selectedStatus] || 'DRAFT';
+        params.set('status', statusParam);
+      }
+      params.set('scope', selectedScope);
 
-      const endpoint = `/v1/posts${statusParam ? `?status=${statusParam}` : ''}`;
+      const endpoint = `/v1/posts?${params.toString()}`;
       const res = await fetchApi<{ data: any[] }>(endpoint);
       if (res && res.data) {
         setPosts(res.data);
@@ -96,10 +128,109 @@ export const AdminPostsPage: React.FC<AdminPostsPageProps> = ({ onNavigate, subV
     }
   };
 
+  // Load Static Pages from PostgreSQL API
+  const loadStaticPages = async () => {
+    try {
+      const res = await fetchApi<{ data: any[] }>('/v1/pages');
+      if (res && res.data) {
+        setStaticPages(res.data);
+      }
+    } catch (err) {
+      console.error('Lỗi tải danh sách trang tĩnh:', err);
+    }
+  };
+
   useEffect(() => {
     loadPosts();
     loadCategories();
-  }, [selectedStatus]);
+    loadStaticPages();
+  }, [selectedStatus, selectedScope]);
+
+  const handleOpenEditPageModal = (page: any) => {
+    setEditingStaticPage(page);
+    setEditPageTitle(page.title || '');
+    setEditPageSummary(page.summary || '');
+    setEditPageContent(page.content || '');
+    setIsEditPageModalOpen(true);
+  };
+
+  const handleSaveStaticPage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingStaticPage) return;
+    if (!editPageTitle.trim() || !editPageContent.trim()) {
+      showToast('Thông tin chưa đủ', 'Vui lòng nhập đầy đủ tiêu đề và nội dung trang tĩnh.', 'error');
+      return;
+    }
+
+    setIsSavingPage(true);
+    try {
+      await fetchApi(`/v1/pages/${editingStaticPage.slug}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          title: editPageTitle,
+          summary: editPageSummary,
+          content: editPageContent,
+        }),
+      });
+      showToast('Cập nhật trang tĩnh thành công', `Đã lưu nội dung trang "${editPageTitle}" vào CSDL PostgreSQL.`, 'success');
+      setIsEditPageModalOpen(false);
+      setEditingStaticPage(null);
+      loadStaticPages();
+    } catch (err: any) {
+      showToast('Lỗi cập nhật trang tĩnh', err.message || 'Không thể lưu trang tĩnh', 'error');
+    } finally {
+      setIsSavingPage(false);
+    }
+  };
+
+  const handleCreateStaticPage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPageTitle.trim() || !newPageContent.trim()) {
+      showToast('Thông tin chưa đủ', 'Vui lòng nhập đầy đủ tiêu đề và nội dung trang tĩnh mới.', 'error');
+      return;
+    }
+
+    setIsCreatingPage(true);
+    try {
+      await fetchApi('/v1/pages', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: newPageTitle.trim(),
+          slug: newPageSlug.trim(),
+          summary: newPageSummary.trim() || newPageTitle.trim(),
+          content: newPageContent,
+        }),
+      });
+      showToast('Tạo trang tĩnh thành công', `Đã thêm trang tĩnh mới "${newPageTitle}" vào CSDL PostgreSQL.`, 'success');
+      setIsCreatePageModalOpen(false);
+      setNewPageTitle('');
+      setNewPageSlug('');
+      setNewPageSummary('');
+      setNewPageContent('');
+      loadStaticPages();
+    } catch (err: any) {
+      showToast('Lỗi tạo trang tĩnh', err.message || 'Không thể tạo trang tĩnh', 'error');
+    } finally {
+      setIsCreatingPage(false);
+    }
+  };
+
+  const handleDeleteStaticPage = async (slug: string, title: string) => {
+    if (!['SUPER_ADMIN', 'ADMIN'].includes(userRole)) {
+      showToast('Không đủ quyền hạn', 'Chỉ Quản trị viên mới có quyền xóa trang tĩnh.', 'error');
+      return;
+    }
+
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa trang tĩnh "${title}" (Slug: /${slug})?`)) return;
+
+    try {
+      await fetchApi(`/v1/pages/${slug}`, { method: 'DELETE' });
+      showToast('Đã xóa trang tĩnh', `Đã xóa trang "${title}" khỏi CSDL PostgreSQL`, 'success');
+      loadStaticPages();
+    } catch (err: any) {
+      showToast('Lỗi xóa trang tĩnh', err.message || 'Không thể xóa trang tĩnh', 'error');
+    }
+  };
 
   // Quick Approve Post (For SUPER_ADMIN, ADMIN, EDITOR_LEAD)
   const handleQuickApprove = async (post: any) => {
@@ -246,7 +377,7 @@ export const AdminPostsPage: React.FC<AdminPostsPageProps> = ({ onNavigate, subV
         <>
           {/* Filters Bar */}
           <div className="bg-slate-900/90 p-4 rounded-2xl border border-slate-800 flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-2 flex-1 min-w-[280px]">
+            <div className="flex items-center gap-2 flex-1 min-w-[240px]">
               <Search className="w-4 h-4 text-slate-500" />
               <input
                 type="text"
@@ -257,21 +388,45 @@ export const AdminPostsPage: React.FC<AdminPostsPageProps> = ({ onNavigate, subV
               />
             </div>
 
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-slate-400">Trạng thái:</span>
-              {['all', 'published', 'pending', 'rejected', 'draft'].map((status) => (
+            <div className="flex flex-wrap items-center gap-3 text-xs">
+              {/* Scope filter (Mine vs All) */}
+              <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800">
                 <button
-                  key={status}
-                  onClick={() => setSelectedStatus(status)}
-                  className={`px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${selectedStatus === status ? 'bg-slate-800 text-emerald-400 border border-emerald-800' : 'text-slate-400 hover:text-white'}`}
+                  onClick={() => setSelectedScope('mine')}
+                  className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${selectedScope === 'mine' ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' : 'text-slate-400 hover:text-white'}`}
                 >
-                  {status === 'all' && 'Tất cả'}
-                  {status === 'published' && 'Đã xuất bản'}
-                  {status === 'pending' && 'Chờ duyệt'}
-                  {status === 'rejected' && 'Đã hủy'}
-                  {status === 'draft' && 'Bản nháp'}
+                  Bài viết của tôi
                 </button>
-              ))}
+                <button
+                  onClick={() => setSelectedScope('all')}
+                  className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${selectedScope === 'all' ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' : 'text-slate-400 hover:text-white'}`}
+                >
+                  Tất cả bài viết
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-slate-400">Trạng thái:</span>
+                {[
+                  { key: 'all', label: 'Tất cả' },
+                  { key: 'draft', label: 'Bản nháp' },
+                  { key: 'submitted', label: 'Đã gửi' },
+                  { key: 'in_editing', label: 'Đang biên tập' },
+                  { key: 'pending_approval', label: 'Chờ duyệt' },
+                  { key: 'approved', label: 'Đã duyệt' },
+                  { key: 'published', label: 'Đã xuất bản' },
+                  { key: 'unpublished', label: 'Đã thu hồi' },
+                  { key: 'rejected', label: 'Từ chối' },
+                ].map((item) => (
+                  <button
+                    key={item.key}
+                    onClick={() => setSelectedStatus(item.key)}
+                    className={`px-2 py-0.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${selectedStatus === item.key ? 'bg-slate-800 text-emerald-400 border border-emerald-800' : 'text-slate-400 hover:text-white'}`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -303,112 +458,152 @@ export const AdminPostsPage: React.FC<AdminPostsPageProps> = ({ onNavigate, subV
                       </td>
                     </tr>
                   ) : (
-                    filteredPosts.map((post) => (
-                      <tr key={post.id} className="hover:bg-slate-850 transition-colors">
-                        <td className="p-4 max-w-md">
-                          <div className="flex items-start gap-3">
-                            <img
-                              src={post.imageUrl || 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=120&q=80'}
-                              alt=""
-                              className="w-12 h-12 rounded-lg object-cover shrink-0 border border-slate-800"
-                            />
-                            <div>
-                              <h4 className="font-bold text-white text-xs hover:text-emerald-400 transition-colors cursor-pointer line-clamp-1">
-                                {post.title}
-                              </h4>
-                              <p className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">{post.summary}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="p-4">
-                          <Badge variant="outline" size="sm" className="border-emerald-800 text-emerald-300">
-                            {post.category?.name || 'Tin tức'}
-                          </Badge>
-                        </td>
-                        <td className="p-4 text-slate-400 font-medium">{post.author?.fullName || 'Cán bộ MBS'}</td>
-                        <td className="p-4 text-center">
-                          <div className="flex flex-col items-center gap-1">
-                            {post.status === 'PUBLISHED' && (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 bg-emerald-950 px-2.5 py-0.5 rounded-full border border-emerald-800">
-                                <CheckCircle2 className="w-3 h-3" /> Đã xuất bản
-                              </span>
-                            )}
-                            {post.status === 'PENDING_REVIEW' && (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-400 bg-amber-950 px-2.5 py-0.5 rounded-full border border-amber-800">
-                                <Clock className="w-3 h-3" /> Chờ duyệt
-                              </span>
-                            )}
-                            {post.status === 'DRAFT' && (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-400 bg-slate-800 px-2.5 py-0.5 rounded-full border border-slate-700">
-                                Bản nháp
-                              </span>
-                            )}
-                            {post.status === 'REJECTED' && (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-400 bg-rose-950 px-2.5 py-0.5 rounded-full border border-rose-800">
-                                <XCircle className="w-3 h-3" /> Đã hủy
-                              </span>
-                            )}
-                            {post.rejectionReason && post.status === 'REJECTED' && (
-                              <span className="text-[10px] text-rose-400/90 italic max-w-[160px] truncate" title={`Lý do hủy duyệt: ${post.rejectionReason}`}>
-                                Lý do: {post.rejectionReason}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="p-4 text-center font-mono font-bold text-slate-300">{post.views || 0}</td>
-                        <td className="p-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            {/* Action Buttons for Approver Role */}
-                            {canApprove && post.status === 'PENDING_REVIEW' && (
-                              <>
-                                <button
-                                  onClick={() => handleQuickApprove(post)}
-                                  className="px-2 py-1 bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-800 rounded-lg font-bold text-[11px] flex items-center gap-1 transition-all cursor-pointer shadow-xs"
-                                  title="Phê duyệt & Xuất bản tin này ngay"
-                                >
-                                  <CheckCircle2 className="w-3.5 h-3.5" /> Duyệt
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setRejectingPost(post);
-                                    setRejectionReasonInput('');
-                                    setIsRejectModalOpen(true);
-                                  }}
-                                  className="px-2 py-1 bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-800 rounded-lg font-bold text-[11px] flex items-center gap-1 transition-all cursor-pointer shadow-xs"
-                                  title="Từ chối & Chuyển sang Đã hủy kèm lý do"
-                                >
-                                  <XCircle className="w-3.5 h-3.5" /> Từ chối
-                                </button>
-                              </>
-                            )}
+                    filteredPosts.map((post) => {
+                      const isAuthor = post.authorId === currentUser?.id || post.author?.id === currentUser?.id;
+                      const canEditThisPost = isAuthor || ['SUPER_ADMIN', 'ADMIN', 'APPROVER', 'EDITOR_LEAD'].includes(userRole);
 
-                            <button
-                              onClick={() => onNavigate(`/admin/posts/${post.id}/edit`)}
-                              className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-emerald-400 transition-colors cursor-pointer"
-                              title="Chỉnh sửa bài viết"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => onNavigate(`/tin-tuc/${post.slug}`)}
-                              className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-sky-400 transition-colors cursor-pointer"
-                              title="Xem bài viết công khai"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                            {canDeletePost && (
+                      return (
+                        <tr key={post.id} className="hover:bg-slate-850 transition-colors">
+                          <td className="p-4 max-w-md">
+                            <div className="flex items-start gap-3">
+                              <img
+                                src={post.imageUrl || 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=120&q=80'}
+                                alt=""
+                                className="w-12 h-12 rounded-lg object-cover shrink-0 border border-slate-800"
+                              />
+                              <div>
+                                <h4 className="font-bold text-white text-xs hover:text-emerald-400 transition-colors cursor-pointer line-clamp-1">
+                                  {post.title}
+                                </h4>
+                                <p className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">{post.summary}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <Badge variant="outline" size="sm" className="border-emerald-800 text-emerald-300">
+                              {post.category?.name || 'Tin tức'}
+                            </Badge>
+                          </td>
+                          <td className="p-4 text-slate-400 font-medium">
+                            <div className="flex flex-col">
+                              <span>{post.author?.fullName || 'Cán bộ MBS'}</span>
+                              {isAuthor && <span className="text-[10px] text-emerald-400 font-semibold">(Bài của tôi)</span>}
+                            </div>
+                          </td>
+                          <td className="p-4 text-center">
+                            <div className="flex flex-col items-center gap-1">
+                              {post.status === 'PUBLISHED' && (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 bg-emerald-950 px-2.5 py-0.5 rounded-full border border-emerald-800">
+                                  <CheckCircle2 className="w-3 h-3" /> Đã xuất bản
+                                </span>
+                              )}
+                              {post.status === 'APPROVED' && (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-cyan-300 bg-cyan-950 px-2.5 py-0.5 rounded-full border border-cyan-800">
+                                  Đã duyệt
+                                </span>
+                              )}
+                              {(post.status === 'PENDING_APPROVAL' || post.status === 'PENDING_REVIEW') && (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-400 bg-amber-950 px-2.5 py-0.5 rounded-full border border-amber-800">
+                                  <Clock className="w-3 h-3" /> Chờ duyệt
+                                </span>
+                              )}
+                              {post.status === 'IN_EDITING' && (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-300 bg-purple-950 px-2.5 py-0.5 rounded-full border border-purple-800">
+                                  Đang biên tập
+                                </span>
+                              )}
+                              {post.status === 'SUBMITTED' && (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-sky-300 bg-sky-950 px-2.5 py-0.5 rounded-full border border-sky-800">
+                                  Đã gửi
+                                </span>
+                              )}
+                              {post.status === 'UNPUBLISHED' && (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-300 bg-rose-950 px-2.5 py-0.5 rounded-full border border-rose-800">
+                                  Đã thu hồi
+                                </span>
+                              )}
+                              {post.status === 'DRAFT' && (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-400 bg-slate-800 px-2.5 py-0.5 rounded-full border border-slate-700">
+                                  Bản nháp
+                                </span>
+                              )}
+                              {post.status === 'REJECTED' && (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-400 bg-rose-950 px-2.5 py-0.5 rounded-full border border-rose-800">
+                                  <XCircle className="w-3 h-3" /> Đã hủy
+                                </span>
+                              )}
+                              {post.rejectionReason && post.status === 'REJECTED' && (
+                                <span className="text-[10px] text-rose-400/90 italic max-w-[160px] truncate" title={`Lý do hủy duyệt: ${post.rejectionReason}`}>
+                                  Lý do: {post.rejectionReason}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="p-4 text-center font-mono font-bold text-slate-300">{post.views || 0}</td>
+                          <td className="p-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {/* Action Buttons for Approver Role */}
+                              {canApprove && post.status === 'PENDING_REVIEW' && (
+                                <>
+                                  <button
+                                    onClick={() => handleQuickApprove(post)}
+                                    className="px-2 py-1 bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-800 rounded-lg font-bold text-[11px] flex items-center gap-1 transition-all cursor-pointer shadow-xs"
+                                    title="Phê duyệt & Xuất bản tin này ngay"
+                                  >
+                                    <CheckCircle2 className="w-3.5 h-3.5" /> Duyệt
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setRejectingPost(post);
+                                      setRejectionReasonInput('');
+                                      setIsRejectModalOpen(true);
+                                    }}
+                                    className="px-2 py-1 bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-800 rounded-lg font-bold text-[11px] flex items-center gap-1 transition-all cursor-pointer shadow-xs"
+                                    title="Từ chối & Chuyển sang Đã hủy kèm lý do"
+                                  >
+                                    <XCircle className="w-3.5 h-3.5" /> Từ chối
+                                  </button>
+                                </>
+                              )}
+
+                              {canEditThisPost ? (
+                                <button
+                                  onClick={() => onNavigate(`/admin/posts/${post.id}/edit`)}
+                                  className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-emerald-400 transition-colors cursor-pointer"
+                                  title="Chỉnh sửa bài viết của bạn"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </button>
+                              ) : (
+                                <button
+                                  disabled
+                                  className="p-1.5 opacity-30 cursor-not-allowed text-slate-600"
+                                  title="Chỉ tác giả mới có quyền chỉnh sửa bài viết này"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </button>
+                              )}
                               <button
-                                onClick={() => handleDeletePost(post.id, post.title)}
-                                className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
-                                title="Xóa bài viết (SUPER_ADMIN / ADMIN)"
+                                onClick={() => onNavigate(`/tin-tuc/${post.slug}`)}
+                                className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-sky-400 transition-colors cursor-pointer"
+                                title="Xem bài viết công khai"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <Eye className="w-4 h-4" />
                               </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))
+                              {canDeletePost && (
+                                <button
+                                  onClick={() => handleDeletePost(post.id, post.title)}
+                                  className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
+                                  title="Xóa bài viết (SUPER_ADMIN / ADMIN)"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -469,25 +664,229 @@ export const AdminPostsPage: React.FC<AdminPostsPageProps> = ({ onNavigate, subV
       {currentView === 'pages' && (
         /* Static Pages View */
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4 shadow-xl">
-          <h3 className="text-base font-bold text-white pb-4 border-b border-slate-800">Danh sách Trang cố định Hệ thống</h3>
+          <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+            <div>
+              <h3 className="text-base font-bold text-white">Danh sách Trang cố định Cổng thông tin</h3>
+              <p className="text-xs text-slate-400 mt-0.5">Quản lý và biên tập nội dung HTML hiển thị trên Cổng thông tin (CSDL PostgreSQL)</p>
+            </div>
+            {canManageCategories && (
+              <Button
+                onClick={() => {
+                  setNewPageTitle('');
+                  setNewPageSlug('');
+                  setNewPageSummary('');
+                  setNewPageContent('');
+                  setIsCreatePageModalOpen(true);
+                }}
+                size="sm"
+                variant="primary"
+                className="gap-1.5 bg-emerald-600 hover:bg-emerald-500 font-bold"
+              >
+                <Plus className="w-4 h-4" /> Thêm trang tĩnh mới
+              </Button>
+            )}
+          </div>
 
           <div className="divide-y divide-slate-800 border border-slate-800 rounded-xl overflow-hidden">
-            {pagesList.map((page, idx) => (
-              <div key={idx} className="p-4 bg-slate-950 hover:bg-slate-900 flex items-center justify-between transition-colors">
+            {(staticPages.length > 0 ? staticPages : pagesList).map((page, idx) => (
+              <div key={page.id || idx} className="p-4 bg-slate-950 hover:bg-slate-900 flex items-center justify-between transition-colors">
                 <div>
                   <h4 className="font-bold text-white text-sm">{page.title}</h4>
-                  <span className="text-xs font-mono text-emerald-400">{page.slug}</span>
+                  <span className="text-xs font-mono text-emerald-400">Slug: /{page.slug}</span>
+                  {page.summary && <p className="text-xs text-slate-400 mt-1 line-clamp-1">{page.summary}</p>}
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="text-xs text-slate-400">Cập nhật: {page.updatedAt}</span>
-                  <Button variant="outline" size="sm" className="text-xs bg-slate-900 border-slate-800 text-slate-200">
-                    Chỉnh sửa nội dung
+                  <span className="text-xs text-slate-400 font-mono">
+                    Cập nhật: {page.updatedAt ? new Date(page.updatedAt).toLocaleDateString('vi-VN') : page.updatedAt || '12/01/2026'}
+                  </span>
+                  <Button
+                    onClick={() => handleOpenEditPageModal(page)}
+                    variant="outline"
+                    size="sm"
+                    className="text-xs bg-slate-900 border-slate-700 text-emerald-300 hover:bg-slate-800 font-bold gap-1 cursor-pointer"
+                  >
+                    <Edit className="w-3.5 h-3.5" /> Chỉnh sửa nội dung
                   </Button>
+                  {canDeletePost && !['gioi-thieu', 'chuc-nang-nhiem-vu', 'co-cau-to-chuc', 'danh-ba-can-bo'].includes(page.slug) && (
+                    <button
+                      onClick={() => handleDeleteStaticPage(page.slug, page.title)}
+                      className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
+                      title="Xóa trang tĩnh này"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
           </div>
         </div>
+      )}
+
+      {/* Modal chỉnh sửa trang tĩnh */}
+      {isEditPageModalOpen && (
+        <Modal
+          isOpen={isEditPageModalOpen}
+          onClose={() => {
+            setIsEditPageModalOpen(false);
+            setEditingStaticPage(null);
+          }}
+          title={`Biên tập nội dung Trang tĩnh: ${editingStaticPage?.title || ''}`}
+        >
+          <form onSubmit={handleSaveStaticPage} className="space-y-4 text-xs text-slate-300">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Tiêu đề trang *</label>
+              <input
+                type="text"
+                value={editPageTitle}
+                onChange={(e) => setEditPageTitle(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-bold placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Tóm tắt mô tả ngắn</label>
+              <textarea
+                rows={2}
+                value={editPageSummary}
+                onChange={(e) => setEditPageSummary(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400">Nội dung chi tiết (Rich HTML Content) *</label>
+                <span className="text-[10px] text-emerald-400 font-semibold">Tích hợp RichTextToolbar</span>
+              </div>
+              <RichTextToolbar textareaRef={pageTextareaRef} content={editPageContent} onChange={setEditPageContent} />
+              <textarea
+                ref={pageTextareaRef}
+                rows={10}
+                value={editPageContent}
+                onChange={(e) => setEditPageContent(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs font-mono text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500 leading-relaxed"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setIsEditPageModalOpen(false);
+                  setEditingStaticPage(null);
+                }}
+              >
+                Hủy bỏ
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                size="sm"
+                disabled={isSavingPage}
+                className="gap-1.5 bg-emerald-600 hover:bg-emerald-500 font-bold"
+              >
+                <Save className="w-3.5 h-3.5" /> {isSavingPage ? 'Đang lưu vào DB...' : 'Lưu thay đổi vào DB'}
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Modal tạo mới trang tĩnh */}
+      {isCreatePageModalOpen && (
+        <Modal
+          isOpen={isCreatePageModalOpen}
+          onClose={() => setIsCreatePageModalOpen(false)}
+          title="Tạo mới Trang tĩnh vào CSDL PostgreSQL"
+        >
+          <form onSubmit={handleCreateStaticPage} className="space-y-4 text-xs text-slate-300">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Tiêu đề trang *</label>
+              <input
+                type="text"
+                placeholder="VD: Lịch sử hình thành & Phát triển"
+                value={newPageTitle}
+                onChange={(e) => {
+                  setNewPageTitle(e.target.value);
+                  const generatedSlug = e.target.value
+                    .toLowerCase()
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .replace(/[đĐ]/g, 'd')
+                    .replace(/[^\w\s-]/g, '')
+                    .replace(/\s+/g, '-')
+                    .replace(/-+/g, '-');
+                  setNewPageSlug(generatedSlug);
+                }}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-bold placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Đường dẫn tĩnh (Slug)</label>
+              <div className="flex items-center bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs font-mono text-slate-400">
+                <span className="text-slate-500 select-none">https://mbs.tphcm.gov.vn/so-do-to-chuc?tab=</span>
+                <input
+                  type="text"
+                  placeholder="lich-su-hinh-thanh"
+                  value={newPageSlug}
+                  onChange={(e) => setNewPageSlug(e.target.value)}
+                  className="bg-transparent text-emerald-400 font-bold focus:outline-none flex-1 ml-1"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Tóm tắt mô tả ngắn</label>
+              <textarea
+                rows={2}
+                placeholder="Nhập 1-2 câu tóm tắt nội dung chính trang tĩnh..."
+                value={newPageSummary}
+                onChange={(e) => setNewPageSummary(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400">Nội dung chi tiết (Rich HTML Content) *</label>
+                <span className="text-[10px] text-emerald-400 font-semibold">Tích hợp RichTextToolbar</span>
+              </div>
+              <RichTextToolbar textareaRef={newPageTextareaRef} content={newPageContent} onChange={setNewPageContent} />
+              <textarea
+                ref={newPageTextareaRef}
+                rows={10}
+                placeholder="Soạn thảo nội dung văn bản, bảng biểu HTML..."
+                value={newPageContent}
+                onChange={(e) => setNewPageContent(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs font-mono text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500 leading-relaxed"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsCreatePageModalOpen(false)}
+              >
+                Hủy bỏ
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                size="sm"
+                disabled={isCreatingPage}
+                className="gap-1.5 bg-emerald-600 hover:bg-emerald-500 font-bold"
+              >
+                <Plus className="w-3.5 h-3.5" /> {isCreatingPage ? 'Đang tạo...' : 'Tạo mới trang tĩnh'}
+              </Button>
+            </div>
+          </form>
+        </Modal>
       )}
 
       {/* Modal từ chối bài viết chuyển sang Đã Hủy */}

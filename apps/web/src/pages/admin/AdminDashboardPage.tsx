@@ -214,7 +214,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({ onNaviga
               </div>
 
               <div className="space-y-3">
-                {topViewedPosts.map((post, i) => (
+                {topViewedPosts.map((post: any, i: number) => (
                   <div key={i} className="p-3 bg-slate-950/80 rounded-xl border border-slate-800/80 hover:border-slate-700 transition-all space-y-1">
                     <Badge variant="outline" size="sm" className="text-[10px] border-emerald-800 text-emerald-300">
                       {post.category}

@@ -1,18 +1,85 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Building2, Users, Phone, Mail, Search, ShieldCheck, MapPin, Award, FileText, CheckCircle2 } from 'lucide-react';
 import { Breadcrumb } from '../components/ui/breadcrumb';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { OrgChart } from '../components/shared/OrgChart';
 import { Tabs } from '../components/ui/tabs';
+import { fetchApi } from '../services/api-client';
 
 export interface OrgStructurePageProps {
   onNavigate: (path: string) => void;
+  initialTab?: string;
 }
 
-export const OrgStructurePage: React.FC<OrgStructurePageProps> = ({ onNavigate }) => {
-  const [activeTab, setActiveTab] = useState('intro');
+export const OrgStructurePage: React.FC<OrgStructurePageProps> = ({ onNavigate, initialTab }) => {
+  const mapTabParam = (tab?: string) => {
+    if (!tab) return 'intro';
+    if (tab === 'functions') return 'intro';
+    if (tab === 'org') return 'organogram';
+    if (tab === 'leaders') return 'leadership';
+    if (tab === 'directory') return 'directory';
+    return tab;
+  };
+
+  const [activeTab, setActiveTab] = useState(() => mapTabParam(initialTab));
   const [searchDirectory, setSearchDirectory] = useState('');
+  const [pageData, setPageData] = useState<any | null>(null);
+  const [allPages, setAllPages] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(mapTabParam(initialTab));
+    }
+  }, [initialTab]);
+
+  useEffect(() => {
+    // Load all static pages to generate dynamic tabs
+    fetchApi<{ data: any[] }>('/v1/pages')
+      .then((res) => {
+        if (res && res.data) {
+          setAllPages(res.data);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const slug = activeTab === 'organogram'
+      ? 'co-cau-to-chuc'
+      : activeTab === 'leadership'
+      ? 'gioi-thieu'
+      : activeTab === 'directory'
+      ? 'danh-ba-can-bo'
+      : activeTab === 'intro'
+      ? 'chuc-nang-nhiem-vu'
+      : activeTab;
+
+    fetchApi<{ data: any }>(`/v1/pages/${slug}`)
+      .then((res) => {
+        if (res && res.data) {
+          setPageData(res.data);
+        }
+      })
+      .catch(() => {
+        setPageData(null);
+      });
+  }, [activeTab]);
+
+  const customPages = allPages.filter(
+    (p) => !['gioi-thieu', 'chuc-nang-nhiem-vu', 'co-cau-to-chuc', 'danh-ba-can-bo'].includes(p.slug)
+  );
+
+  const tabsList = [
+    { id: 'intro', label: '1. Chức năng - Nhiệm vụ' },
+    { id: 'leadership', label: '2. Ban Lãnh đạo' },
+    { id: 'organogram', label: '3. Sơ đồ tổ chức tương tác' },
+    { id: 'directory', label: '4. Danh bạ điện tử cán bộ' },
+    ...customPages.map((cp, index) => ({
+      id: cp.slug,
+      label: `${index + 5}. ${cp.title}`,
+    })),
+  ];
 
   const directoryList = [
     { name: 'Nguyễn Văn Minh', role: 'Trưởng ban', dept: 'Ban Giám đốc', phone: '028 3822 5566 (Ext 101)', email: 'minhnv.mbs@tphcm.gov.vn' },
@@ -60,12 +127,7 @@ export const OrgStructurePage: React.FC<OrgStructurePageProps> = ({ onNavigate }
 
         {/* Tab switcher */}
         <Tabs
-          tabs={[
-            { id: 'intro', label: '1. Chức năng - Nhiệm vụ' },
-            { id: 'leadership', label: '2. Ban Lãnh đạo' },
-            { id: 'organogram', label: '3. Sơ đồ tổ chức tương tác' },
-            { id: 'directory', label: '4. Danh bạ điện tử cán bộ' },
-          ]}
+          tabs={tabsList}
           activeTab={activeTab}
           onChange={setActiveTab}
         />
@@ -75,44 +137,58 @@ export const OrgStructurePage: React.FC<OrgStructurePageProps> = ({ onNavigate }
           <div className="space-y-6">
             <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-6">
               <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <Badge variant="gov">QUYẾT ĐỊNH THÀNH LẬP</Badge>
-                  <span className="text-xs text-slate-500 font-mono">UBND TP. HỒ CHÍ MINH</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="gov">QUYẾT ĐỊNH THÀNH LẬP</Badge>
+                    <span className="text-xs text-slate-500 font-mono">UBND TP. HỒ CHÍ MINH</span>
+                  </div>
+                  <span className="text-[11px] text-emerald-700 font-semibold bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                    Nội dung nạp động từ CSDL PostgreSQL (CMS)
+                  </span>
                 </div>
                 <h2 className="text-lg sm:text-xl font-bold text-slate-900">
-                  Vị trí pháp lý và chức năng nhiệm vụ trọng tâm
+                  {pageData?.title || 'Vị trí pháp lý và chức năng nhiệm vụ trọng tâm'}
                 </h2>
-                <p className="text-xs sm:text-sm text-slate-700 leading-relaxed text-justify">
-                  Ban Quản lý các Khu liên hợp xử lý chất thải thành phố (viết tắt là Ban Quản lý MBS) là đơn vị sự nghiệp công lập trực thuộc Sở Tài nguyên và Môi trường thành phố Hồ Chí Minh, có tư cách pháp nhân, có con dấu riêng và được mở tài khoản tại Kho bạc Nhà nước và Ngân hàng thương mại theo quy định của pháp luật.
-                </p>
+                {pageData?.summary && (
+                  <p className="text-xs sm:text-sm text-slate-700 leading-relaxed text-justify font-medium bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    {pageData.summary}
+                  </p>
+                )}
               </div>
 
-              {/* 4 Pillars of Duty */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
-                {[
-                  {
-                    title: '1. Quản lý Quy hoạch & Hạ tầng kỹ thuật',
-                    desc: 'Tổ chức quản lý, giám sát đầu tư xây dựng các công trình hạ tầng kỹ thuật dùng chung tại các Khu liên hợp xử lý chất thải Đa Phước (Bình Chánh) và Phước Hiệp (Củ Chi).'
-                  },
-                  {
-                    title: '2. Giám sát Tiếp nhận & Xử lý Chất thải',
-                    desc: 'Trực ban 24/7 kiểm soát khối lượng, phân loại và quy trình tiếp nhận rác sinh hoạt, rác công nghiệp, bùn thải và chất thải nguy hại vào các nhà máy xử lý rác theo hợp đồng.'
-                  },
-                  {
-                    title: '3. Quan trắc & Bảo vệ Môi trường',
-                    desc: 'Vận hành hệ thống 18 trạm quan trắc tự động không khí, nước ngầm, nước rỉ rác; kiểm tra mùi hôi và chỉ đạo các biện pháp phòng ngừa sự cố ô nhiễm môi trường.'
-                  },
-                  {
-                    title: '4. Thúc đẩy Chuyển đổi Công nghệ Xanh (WtE)',
-                    desc: 'Phối hợp với các nhà đầu tư đẩy nhanh tiến độ chuyển đổi công nghệ chôn lấp hợp vệ sinh sang công nghệ đốt rác phát điện (Waste-to-Energy) theo định hướng Net Zero 2030.'
-                  },
-                ].map((item, idx) => (
-                  <div key={idx} className="p-5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-emerald-50/40 transition-colors space-y-2">
-                    <h3 className="text-sm font-bold text-emerald-800">{item.title}</h3>
-                    <p className="text-xs text-slate-600 leading-relaxed">{item.desc}</p>
-                  </div>
-                ))}
-              </div>
+              {pageData?.content ? (
+                <div
+                  className="prose max-w-none text-slate-800 text-xs sm:text-sm leading-relaxed border-t border-slate-100 pt-4"
+                  dangerouslySetInnerHTML={{ __html: pageData.content }}
+                />
+              ) : (
+                /* Default Fallback */
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+                  {[
+                    {
+                      title: '1. Quản lý Quy hoạch & Hạ tầng kỹ thuật',
+                      desc: 'Tổ chức quản lý, giám sát đầu tư xây dựng các công trình hạ tầng kỹ thuật dùng chung tại các Khu liên hợp xử lý chất thải Đa Phước (Bình Chánh) và Phước Hiệp (Củ Chi).'
+                    },
+                    {
+                      title: '2. Giám sát Tiếp nhận & Xử lý Chất thải',
+                      desc: 'Trực ban 24/7 kiểm soát khối lượng, phân loại và quy trình tiếp nhận rác sinh hoạt, rác công nghiệp, bùn thải và chất thải nguy hại vào các nhà máy xử lý rác theo hợp đồng.'
+                    },
+                    {
+                      title: '3. Quan trắc & Bảo vệ Môi trường',
+                      desc: 'Vận hành hệ thống 18 trạm quan trắc tự động không khí, nước ngầm, nước rỉ rác; kiểm tra mùi hôi và chỉ đạo các biện pháp phòng ngừa sự cố ô nhiễm môi trường.'
+                    },
+                    {
+                      title: '4. Thúc đẩy Chuyển đổi Công nghệ Xanh (WtE)',
+                      desc: 'Phối hợp với các nhà đầu tư đẩy nhanh tiến độ chuyển đổi công nghệ chôn lấp hợp vệ sinh sang công nghệ đốt rác phát điện (Waste-to-Energy) theo định hướng Net Zero 2030.'
+                    },
+                  ].map((item, idx) => (
+                    <div key={idx} className="p-5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-emerald-50/40 transition-colors space-y-2">
+                      <h3 className="text-sm font-bold text-emerald-800">{item.title}</h3>
+                      <p className="text-xs text-slate-600 leading-relaxed">{item.desc}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -131,32 +207,32 @@ export const OrgStructurePage: React.FC<OrgStructurePageProps> = ({ onNavigate }
                 },
                 {
                   name: 'Đồng chí Lê Thị Thu Hằng',
-                  role: 'Phó Trưởng ban Quản lý MBS',
-                  duties: 'Phụ trách công tác quản lý kỹ thuật, công nghệ môi trường, giám sát quan trắc tự động 24/7; giải quyết phản ánh mùi hôi và thủ tục dịch vụ công trực tuyến.',
+                  role: 'Phó Trưởng ban (Phụ trách Kỹ thuật)',
+                  duties: 'Trực tiếp chỉ đạo công tác quản lý kỹ thuật, công nghệ xử lý rác thải, bảo vệ môi trường, vận hành các trạm quan trắc tự động và công tác an toàn lao động tại các Khu LHXLCT.',
                   avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80',
                   email: 'hangltt.mbs@tphcm.gov.vn'
                 },
                 {
                   name: 'Đồng chí Trần Đình Quân',
-                  role: 'Phó Trưởng ban Quản lý MBS',
-                  duties: 'Phụ trách công tác quản lý xây dựng công trình, hạ tầng kỹ thuật bãi rác, nghiệm thu khối lượng vận hành tiếp nhận chất thải và phòng chống cháy nổ mùa khô.',
+                  role: 'Phó Trưởng ban (Phụ trách Kế hoạch - ĐTXD)',
+                  duties: 'Trực tiếp chỉ đạo công tác quản lý đầu tư xây dựng các công trình hạ tầng kỹ thuật dùng chung, giải phóng mặt bằng, đấu thầu và các thủ tục pháp lý dự án.',
                   avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80',
                   email: 'quantd.mbs@tphcm.gov.vn'
                 },
-              ].map((leader, i) => (
-                <div key={i} className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4 text-center flex flex-col justify-between">
-                  <div className="space-y-3">
-                    <div className="w-28 h-28 rounded-full overflow-hidden mx-auto border-4 border-emerald-100 shadow-md">
-                      <img src={leader.avatar} alt={leader.name} className="w-full h-full object-cover" />
-                    </div>
+              ].map((leader, idx) => (
+                <div key={idx} className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4 hover:border-emerald-500 transition-all">
+                  <div className="flex items-center gap-4">
+                    <img src={leader.avatar} alt={leader.name} className="w-16 h-16 rounded-xl object-cover border-2 border-emerald-600 shadow-sm" />
                     <div>
-                      <h3 className="text-base font-black text-slate-900">{leader.name}</h3>
-                      <span className="text-xs font-bold text-emerald-700 block mt-0.5">{leader.role}</span>
+                      <h3 className="font-bold text-slate-900 text-base">{leader.name}</h3>
+                      <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 block mt-1">
+                        {leader.role}
+                      </span>
                     </div>
-                    <p className="text-xs text-slate-600 text-justify leading-relaxed pt-2 border-t border-slate-100">
-                      {leader.duties}
-                    </p>
                   </div>
+                  <p className="text-xs text-slate-600 leading-relaxed pt-2 border-t border-slate-100">
+                    {leader.duties}
+                  </p>
                   <div className="pt-3 border-t border-slate-100 text-xs text-slate-500 font-mono">
                     {leader.email}
                   </div>
@@ -219,6 +295,37 @@ export const OrgStructurePage: React.FC<OrgStructurePageProps> = ({ onNavigate }
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* CUSTOM STATIC PAGES CREATED FROM CMS */}
+        {!['intro', 'leadership', 'organogram', 'directory'].includes(activeTab) && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-6">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Badge variant="gov">TRANG NỘI DUNG TĨNH</Badge>
+                  <span className="text-[11px] text-emerald-700 font-semibold bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                    Nội dung nạp từ CSDL PostgreSQL (CMS)
+                  </span>
+                </div>
+                <h2 className="text-lg sm:text-xl font-bold text-slate-900">
+                  {pageData?.title}
+                </h2>
+                {pageData?.summary && (
+                  <p className="text-xs sm:text-sm text-slate-700 leading-relaxed text-justify font-medium bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    {pageData.summary}
+                  </p>
+                )}
+              </div>
+
+              {pageData?.content && (
+                <div
+                  className="prose max-w-none text-slate-800 text-xs sm:text-sm leading-relaxed border-t border-slate-100 pt-4"
+                  dangerouslySetInnerHTML={{ __html: pageData.content }}
+                />
+              )}
             </div>
           </div>
         )}

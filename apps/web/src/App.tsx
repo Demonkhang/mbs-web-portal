@@ -76,6 +76,7 @@ export function App() {
     setAuthToken(token);
     localStorage.setItem('mbs_admin_token', token);
     localStorage.setItem('mbs_access_token', token);
+    localStorage.setItem('mbs_token', token);
     localStorage.setItem('mbs_admin_user', JSON.stringify(user));
     navigate('/admin/dashboard');
   };
@@ -85,9 +86,11 @@ export function App() {
     setAuthToken(null);
     localStorage.removeItem('mbs_admin_token');
     localStorage.removeItem('mbs_access_token');
+    localStorage.removeItem('mbs_token');
     localStorage.removeItem('mbs_admin_user');
     navigate('/admin/login');
   };
+
 
   const isAdminRoute = currentPath.startsWith('/admin');
 
@@ -211,8 +214,10 @@ export function App() {
       const defaultTab = currentPath.includes('#tra-cuu') || currentPath.includes('#tracking') ? 'tracking' : 'services';
       return <PublicServicesPage onNavigate={navigate} defaultTab={defaultTab} />;
     }
-    if (currentPath === '/gioi-thieu') {
-      return <OrgStructurePage onNavigate={navigate} />;
+    if (currentPath.startsWith('/gioi-thieu') || currentPath.startsWith('/so-do-to-chuc')) {
+      const queryParams = new URLSearchParams(currentPath.split('?')[1] || '');
+      const tabParam = queryParams.get('tab') || undefined;
+      return <OrgStructurePage onNavigate={navigate} initialTab={tabParam} />;
     }
     if (currentPath === '/lich-cong-tac') {
       return <WorkSchedulePage onNavigate={navigate} />;
@@ -220,12 +225,13 @@ export function App() {
     if (currentPath === '/phan-anh') {
       return <FeedbackPage onNavigate={navigate} />;
     }
-    if (currentPath === '/faq') {
+    if (currentPath === '/faq' || currentPath === '/hoi-dap') {
       return <FaqPage onNavigate={navigate} />;
     }
-    if (currentPath === '/media') {
+    if (currentPath === '/media' || currentPath === '/thu-vien-anh') {
       return <MediaPage onNavigate={navigate} />;
     }
+
     if (currentPath === '/lien-he') {
       return <ContactPage onNavigate={navigate} />;
     }

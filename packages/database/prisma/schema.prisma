@@ -10,6 +10,7 @@ datasource db {
 enum Role {
   SUPER_ADMIN
   ADMIN
+  APPROVER
   EDITOR_LEAD
   EDITOR
   OFFICER
@@ -19,9 +20,13 @@ enum Role {
 
 enum PostStatus {
   DRAFT
+  SUBMITTED
+  IN_EDITING
   PENDING_REVIEW
   PENDING_APPROVAL
+  APPROVED
   PUBLISHED
+  UNPUBLISHED
   REJECTED
   ARCHIVED
 }
@@ -81,31 +86,39 @@ model Category {
 }
 
 model Post {
-  id              String        @id @default(uuid())
-  slug            String        @unique
-  title           String
-  summary         String
-  content         String        @db.Text
-  categoryId      String        @map("category_id")
-  category        Category      @relation(fields: [categoryId], references: [id])
-  authorId        String        @map("author_id")
-  author          User          @relation(fields: [authorId], references: [id])
-  views           Int           @default(0)
-  imageUrl        String        @map("image_url")
-  imageCaption    String?       @map("image_caption")
-  isFeatured      Boolean       @default(false) @map("is_featured")
-  isSpotlight     Boolean       @default(false) @map("is_spotlight")
-  tags            String[]
-  status          PostStatus    @default(DRAFT)
-  rejectionReason String?       @map("rejection_reason")
-  publishedAt     DateTime?     @map("published_at")
-  metaTitle       String?       @map("meta_title")
-  metaDescription String?       @map("meta_description")
-  isDeleted       Boolean       @default(false) @map("is_deleted")
-  deletedAt       DateTime?     @map("deleted_at")
-  createdAt       DateTime      @default(now()) @map("created_at")
-  updatedAt       DateTime      @updatedAt @map("updated_at")
-  history         PostHistory[]
+  id                 String        @id @default(uuid())
+  slug               String        @unique
+  title              String
+  summary            String
+  content            String        @db.Text
+  categoryId         String        @map("category_id")
+  category           Category      @relation(fields: [categoryId], references: [id])
+  authorId           String        @map("author_id")
+  author             User          @relation(fields: [authorId], references: [id])
+  views              Int           @default(0)
+  imageUrl           String        @map("image_url")
+  imageCaption       String?       @map("image_caption")
+  isFeatured         Boolean       @default(false) @map("is_featured")
+  isSpotlight        Boolean       @default(false) @map("is_spotlight")
+  tags               String[]
+  status             PostStatus    @default(DRAFT)
+  isSafetyCommitted  Boolean       @default(false) @map("is_safety_committed")
+  attachments        String[]      @default([])
+  royaltyScore       Int?          @map("royalty_score")
+  royaltyNotes       String?       @map("royalty_notes")
+  approvalNotes      String?       @map("approval_notes")
+  unpublishReason    String?       @map("unpublish_reason")
+  unpublishedAt      DateTime?     @map("unpublished_at")
+  unpublishedById    String?       @map("unpublished_by_id")
+  rejectionReason    String?       @map("rejection_reason")
+  publishedAt        DateTime?     @map("published_at")
+  metaTitle          String?       @map("meta_title")
+  metaDescription    String?       @map("meta_description")
+  isDeleted          Boolean       @default(false) @map("is_deleted")
+  deletedAt          DateTime?     @map("deleted_at")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+  history            PostHistory[]
 
   @@map("posts")
 }
@@ -286,3 +299,57 @@ model AuditLog {
 
   @@map("audit_logs")
 }
+
+model StaticPage {
+  id              String   @id @default(uuid())
+  slug            String   @unique
+  title           String
+  summary         String?  @db.Text
+  content         String   @db.Text
+  metaTitle       String?  @map("meta_title")
+  metaDescription String?  @map("meta_description")
+  updatedById     String?  @map("updated_by_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("static_pages")
+}
+
+model Media {
+  id            String   @id @default(uuid())
+  title         String?
+  description   String?  @db.Text
+  category      String?  @default("Khu Đa Phước")
+  caption       String?
+  isFeatured    Boolean  @default(false) @map("is_featured")
+  tags          String[]
+  originalName  String   @map("original_name")
+  filename      String   @unique
+  mimeType      String   @map("mime_type")
+  size          Int
+  width         Int?
+  height        Int?
+  url           String
+  relativeUrl   String   @map("relative_url")
+  storageDriver String   @default("local") @map("storage_driver")
+  uploadedById  String?  @map("uploaded_by_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("media")
+}
+
+model MediaCategory {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  slug      String   @unique
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("media_categories")
+}
+
+
+
+
