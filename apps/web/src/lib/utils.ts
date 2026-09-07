@@ -92,3 +92,59 @@ export class VietnameseTTS {
     return !!this.synth && this.synth.speaking;
   }
 }
+
+export function getAbsolutePdfUrl(fileUrl?: string): string | null {
+  if (!fileUrl) return null;
+  if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://') || fileUrl.startsWith('blob:')) {
+    return fileUrl;
+  }
+  const apiBase = (import.meta as any).env?.VITE_API_URL || 'http://localhost:4000/api';
+  const serverHost = apiBase.replace(/\/api\/?$/, '');
+  const cleanPath = fileUrl.startsWith('/') ? fileUrl : `/${fileUrl}`;
+  return `${serverHost}${cleanPath}`;
+}
+
+export async function downloadPdfFile(
+  fileUrl: string | undefined,
+  fileCode: string,
+  onToast?: (title: string, msg: string, type: 'info' | 'success' | 'warning' | 'error') => void
+): Promise<void> {
+  const fullUrl = getAbsolutePdfUrl(fileUrl || '/uploads/documents/van-ban-mbs-2026.pdf');
+  if (!fullUrl) {
+    if (onToast) onToast('Thông báo', 'Chưa có đường dẫn tệp PDF cho văn bản này', 'warning');
+    return;
+  }
+
+  const safeFilename = `${(fileCode || 'van-ban').replace(/[/\\?%*:|"<>]/g, '_')}.pdf`;
+
+  try {
+    if (onToast) onToast('Đang xử lý tải về', `Đang chuẩn bị tệp PDF: ${fileCode}...`, 'info');
+
+    const response = await fetch(fullUrl);
+    if (!response.ok) throw new Error(`Máy chủ trả về mã lỗi: ${response.status}`);
+
+    const blob = await response.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = safeFilename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    setTimeout(() => window.URL.revokeObjectURL(blobUrl), 10000);
+    if (onToast) onToast('Tải thành công', `Đã lưu tệp ${safeFilename} về máy tính`, 'success');
+  } catch (err) {
+    console.warn('Blob fetch failed, falling back to direct download:', err);
+    const link = document.createElement('a');
+    link.href = fullUrl;
+    link.target = '_blank';
+    link.download = safeFilename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    if (onToast) onToast('Thông báo', `Đã mở tệp ${safeFilename} trong cửa sổ tải về`, 'info');
+  }
+}
+

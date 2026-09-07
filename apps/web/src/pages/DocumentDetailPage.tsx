@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FileText, Download, Printer, Share2, Calendar, Building2, User, ArrowLeft, CheckCircle2, AlertCircle, ExternalLink, ShieldCheck } from 'lucide-react';
 import { MOCK_DOCUMENTS } from '../lib/mock-data';
 import { Breadcrumb } from '../components/ui/breadcrumb';
@@ -6,6 +6,8 @@ import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { DocViewer } from '../components/shared/DocViewer';
 import { useToast } from '../components/ui/toast';
+import { fetchApi } from '../services/api-client';
+import { downloadPdfFile } from '../lib/utils';
 
 export interface DocumentDetailPageProps {
   id: string;
@@ -14,16 +16,96 @@ export interface DocumentDetailPageProps {
 
 export const DocumentDetailPage: React.FC<DocumentDetailPageProps> = ({ id, onNavigate }) => {
   const { showToast } = useToast();
-  const doc = MOCK_DOCUMENTS.find((d) => d.id === id) || MOCK_DOCUMENTS[0];
-  const relatedDocs = MOCK_DOCUMENTS.filter((d) => d.id !== doc.id).slice(0, 3);
+  const [doc, setDoc] = useState<any | null>(null);
+  const [relatedDocs, setRelatedDocs] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    setIsLoading(true);
+
+    const loadDocDetail = async () => {
+      try {
+        // 1. Try fetching exact document from PostgreSQL API
+        const res = await fetchApi<{ data: any }>(`/v1/documents/${id}`);
+        if (res && res.data && isMounted) {
+          setDoc(res.data);
+        } else {
+          // Fallback to mock data if API doc not found
+          const mock = MOCK_DOCUMENTS.find((d) => d.id === id) || MOCK_DOCUMENTS[0];
+          if (isMounted) setDoc(mock);
+        }
+      } catch (err) {
+        // Fallback to mock data on error
+        const mock = MOCK_DOCUMENTS.find((d) => d.id === id) || MOCK_DOCUMENTS[0];
+        if (isMounted) setDoc(mock);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
+    const loadRelatedDocs = async () => {
+      try {
+        const resAll = await fetchApi<{ data: any[] }>('/v1/documents');
+        if (resAll && resAll.data && isMounted) {
+          const others = resAll.data.filter((d) => d.id !== id).slice(0, 4);
+          setRelatedDocs(others);
+        }
+      } catch (e) {
+        const mockOthers = MOCK_DOCUMENTS.filter((d) => d.id !== id).slice(0, 4);
+        if (isMounted) setRelatedDocs(mockOthers);
+      }
+    };
+
+    loadDocDetail();
+    loadRelatedDocs();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [id]);
 
   const handleDownload = () => {
-    showToast('Tải văn bản', `Đang tải xuống tệp ${doc.code} (${doc.fileSize})...`, 'success');
+    if (!doc) return;
+    downloadPdfFile(doc.fileUrl, doc.code || 'van-ban', showToast);
   };
+
 
   const handlePrint = () => {
     window.print();
   };
+
+  const formatDateStr = (dateVal?: string) => {
+    if (!dateVal) return '15/02/2026';
+    try {
+      return new Date(dateVal).toLocaleDateString('vi-VN');
+    } catch (e) {
+      return dateVal;
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="bg-slate-50 min-h-screen py-16 flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <div className="w-10 h-10 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-xs text-slate-500 font-bold">Đang tải chi tiết văn bản từ CSDL PostgreSQL...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!doc) {
+    return (
+      <div className="bg-slate-50 min-h-screen py-16 text-center space-y-4">
+        <AlertCircle className="w-12 h-12 text-rose-500 mx-auto" />
+        <h2 className="text-lg font-bold text-slate-800">Không tìm thấy văn bản pháp quy</h2>
+        <Button variant="outline" size="sm" onClick={() => onNavigate('/van-ban')}>
+          Quay lại danh sách văn bản
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-slate-50 min-h-screen py-8">
@@ -57,8 +139,8 @@ export const DocumentDetailPage: React.FC<DocumentDetailPageProps> = ({ id, onNa
                 <span className="font-mono text-xs font-black px-3 py-1 bg-emerald-100 text-emerald-800 rounded-md border border-emerald-200">
                   {doc.code}
                 </span>
-                <Badge variant={doc.status === 'con-hieu-luc' ? 'success' : 'danger'}>
-                  {doc.status === 'con-hieu-luc' ? 'Còn hiệu lực' : doc.status === 'het-hieu-luc' ? 'Hết hiệu lực' : 'Chưa hiệu lực'}
+                <Badge variant={doc.status === 'Hết hiệu lực' ? 'danger' : 'success'}>
+                  {doc.status || 'Còn hiệu lực'}
                 </Badge>
                 <span className="text-xs text-slate-500 font-semibold">• {doc.docType}</span>
               </div>
@@ -72,7 +154,7 @@ export const DocumentDetailPage: React.FC<DocumentDetailPageProps> = ({ id, onNa
             <div className="flex items-center gap-2 shrink-0">
               <Button variant="primary" size="md" onClick={handleDownload} className="gap-2 shadow-sm font-bold">
                 <Download className="w-4 h-4" />
-                <span>Tải PDF ({doc.fileSize})</span>
+                <span>Tải PDF ({doc.fileSize || 'PDF'})</span>
               </Button>
               <button
                 onClick={handlePrint}
@@ -92,15 +174,15 @@ export const DocumentDetailPage: React.FC<DocumentDetailPageProps> = ({ id, onNa
             </div>
             <div>
               <span className="text-slate-400 block mb-0.5">Người ký duyệt:</span>
-              <strong className="text-slate-900 font-bold">{doc.signer}</strong>
+              <strong className="text-slate-900 font-bold">{doc.signer || 'Ban Giám đốc'}</strong>
             </div>
             <div>
               <span className="text-slate-400 block mb-0.5">Ngày ban hành:</span>
-              <strong className="text-slate-900 font-mono font-bold">{doc.issueDate}</strong>
+              <strong className="text-slate-900 font-mono font-bold">{formatDateStr(doc.issueDate)}</strong>
             </div>
             <div>
               <span className="text-slate-400 block mb-0.5">Ngày có hiệu lực:</span>
-              <strong className="text-emerald-700 font-mono font-bold">{doc.effectiveDate}</strong>
+              <strong className="text-emerald-700 font-mono font-bold">{formatDateStr(doc.effectiveDate)}</strong>
             </div>
           </div>
 
@@ -124,37 +206,39 @@ export const DocumentDetailPage: React.FC<DocumentDetailPageProps> = ({ id, onNa
         </div>
 
         {/* Related Documents */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
-          <h3 className="text-sm font-black text-slate-900 uppercase tracking-wide border-b border-slate-100 pb-3">
-            VĂN BẢN LIÊN QUAN & CĂN CỨ PHÁP LÝ
-          </h3>
+        {relatedDocs.length > 0 && (
+          <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
+            <h3 className="text-sm font-black text-slate-900 uppercase tracking-wide border-b border-slate-100 pb-3">
+              VĂN BẢN LIÊN QUAN & CĂN CỨ PHÁP LÝ
+            </h3>
 
-          <div className="divide-y divide-slate-100">
-            {relatedDocs.map((item) => (
-              <div
-                key={item.id}
-                onClick={() => onNavigate(`/van-ban/${item.id}`)}
-                className="py-3 flex items-center justify-between gap-4 group cursor-pointer hover:bg-slate-50 rounded-lg px-2 transition-colors"
-              >
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded">
-                      {item.code}
-                    </span>
-                    <span className="text-[11px] text-slate-400 font-mono">{item.issueDate}</span>
+            <div className="divide-y divide-slate-100">
+              {relatedDocs.map((item) => (
+                <div
+                  key={item.id}
+                  onClick={() => onNavigate(`/van-ban/${item.id}`)}
+                  className="py-3 flex items-center justify-between gap-4 group cursor-pointer hover:bg-slate-50 rounded-lg px-2 transition-colors"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded">
+                        {item.code}
+                      </span>
+                      <span className="text-[11px] text-slate-400 font-mono">{formatDateStr(item.issueDate)}</span>
+                    </div>
+                    <h4 className="text-xs sm:text-sm font-bold text-slate-900 group-hover:text-emerald-800 line-clamp-1">
+                      {item.title}
+                    </h4>
                   </div>
-                  <h4 className="text-xs sm:text-sm font-bold text-slate-900 group-hover:text-emerald-800 line-clamp-1">
-                    {item.title}
-                  </h4>
-                </div>
 
-                <span className="text-xs font-bold text-emerald-700 shrink-0 group-hover:underline">
-                  Xem chi tiết →
-                </span>
-              </div>
-            ))}
+                  <span className="text-xs font-bold text-emerald-700 shrink-0 group-hover:underline">
+                    Xem chi tiết &rarr;
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

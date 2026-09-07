@@ -110,20 +110,20 @@ async function ensureDefaultPagesSeeded() {
 }
 
 // GET /api/v1/pages - Get all static pages from PostgreSQL DB
-pagesRouter.get('/', async (_req: Request, res: Response, next: NextFunction) => {
+pagesRouter.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await ensureDefaultPagesSeeded();
-    const cacheKey = 'pages:list:all';
-    const cached = redisService.get<any>(cacheKey);
-    if (cached) {
-      return sendApiResponse(res, cached, 'Danh sách trang tĩnh (Cache)');
+    const includeHidden = req.query.includeHidden === 'true';
+    const whereClause: any = {};
+    if (!includeHidden) {
+      whereClause.isHidden = false;
     }
 
     const pages = await (prisma as any).staticPage.findMany({
+      where: whereClause,
       orderBy: { createdAt: 'asc' },
     });
 
-    redisService.set(cacheKey, pages, 300);
     return sendApiResponse(res, pages, 'Danh sách trang tĩnh từ CSDL PostgreSQL thành công');
   } catch (error) {
     next(error);
@@ -255,6 +255,7 @@ pagesRouter.put('/:slug', JwtAuthGuard, RolesGuard(['SUPER_ADMIN', 'ADMIN', 'EDI
     if (content !== undefined) updateData.content = sanitizeHtmlContent(content);
     if (metaTitle !== undefined) updateData.metaTitle = metaTitle;
     if (metaDescription !== undefined) updateData.metaDescription = metaDescription;
+    if (req.body.isHidden !== undefined) updateData.isHidden = Boolean(req.body.isHidden);
 
     const updated = await (prisma as any).staticPage.update({
       where: { id: existing.id },
@@ -265,6 +266,43 @@ pagesRouter.put('/:slug', JwtAuthGuard, RolesGuard(['SUPER_ADMIN', 'ADMIN', 'EDI
     redisService.clearPattern('pages:');
 
     return sendApiResponse(res, updated, 'Cập nhật nội dung trang tĩnh thành công vào CSDL PostgreSQL');
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PATCH /api/v1/pages/:slug/toggle-visibility - Toggle hide/show static page
+pagesRouter.patch('/:slug/toggle-visibility', JwtAuthGuard, RolesGuard(['SUPER_ADMIN', 'ADMIN', 'EDITOR_LEAD']), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { slug } = req.params;
+    const existing = await (prisma as any).staticPage.findFirst({
+      where: {
+        OR: [{ slug }, { id: slug }],
+      },
+    });
+
+    if (!existing) {
+      return res.status(404).json({
+        type: 'https://mbs.hochiminhcity.gov.vn/errors/not-found',
+        title: 'Not Found',
+        status: 404,
+        detail: `Không tìm thấy trang tĩnh với mã '${slug}' để ẩn/hiện.`,
+        instance: req.originalUrl,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const updated = await (prisma as any).staticPage.update({
+      where: { id: existing.id },
+      data: {
+        isHidden: !existing.isHidden,
+        updatedById: req.user!.id,
+      },
+    });
+
+    redisService.clearPattern('pages:');
+    const msg = updated.isHidden ? 'Đã ẩn trang tĩnh thành công' : 'Đã hiển thị trang tĩnh thành công';
+    return sendApiResponse(res, updated, msg);
   } catch (error) {
     next(error);
   }

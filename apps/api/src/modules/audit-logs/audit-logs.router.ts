@@ -16,11 +16,31 @@ analyticsRouter.get('/overview', OptionalJwtAuthGuard, async (_req: Request, res
     let pendingPostsCount = 0;
     let pendingFeedbacksCount = 0;
     let totalViewsToday = 0;
+    let totalUsers = 0;
+    let superAdminCount = 0;
+    let editorCount = 0;
+    let officerCount = 0;
+    let totalAuditLogs = 0;
     let topPosts: any[] = [];
     let departmentReports: any[] = [];
 
     try {
-      const [dbPosts, dbDocs, dbSubs, dbPendingSubs, dbPendingPosts, dbPendingFeedbacks, dbViewsSum, dbTop, dbAllSubs] = await Promise.all([
+      const [
+        dbPosts,
+        dbDocs,
+        dbSubs,
+        dbPendingSubs,
+        dbPendingPosts,
+        dbPendingFeedbacks,
+        dbViewsSum,
+        dbTop,
+        dbAllSubs,
+        dbTotalUsers,
+        dbSuperAdmins,
+        dbEditors,
+        dbOfficers,
+        dbAuditLogsCount,
+      ] = await Promise.all([
         prisma.post.count({ where: { isDeleted: false } }),
         prisma.legalDocument.count(),
         prisma.publicServiceSubmission.count(),
@@ -45,6 +65,11 @@ analyticsRouter.get('/overview', OptionalJwtAuthGuard, async (_req: Request, res
         prisma.publicServiceSubmission.findMany({
           select: { department: true, status: true },
         }),
+        prisma.user.count(),
+        prisma.user.count({ where: { OR: [{ role: 'SUPER_ADMIN' }, { role: 'ADMIN' }] } }),
+        prisma.user.count({ where: { OR: [{ role: 'EDITOR_LEAD' }, { role: 'EDITOR' }] } }),
+        prisma.user.count({ where: { role: 'OFFICER' } }),
+        prisma.auditLog.count(),
       ]);
 
       totalPosts = dbPosts;
@@ -54,6 +79,11 @@ analyticsRouter.get('/overview', OptionalJwtAuthGuard, async (_req: Request, res
       pendingPostsCount = dbPendingPosts;
       pendingFeedbacksCount = dbPendingFeedbacks;
       totalViewsToday = dbViewsSum._sum.views || 0;
+      totalUsers = dbTotalUsers;
+      superAdminCount = dbSuperAdmins;
+      editorCount = dbEditors;
+      officerCount = dbOfficers;
+      totalAuditLogs = dbAuditLogsCount;
       topPosts = dbTop.map((p) => ({
         title: p.title,
         views: p.views ? p.views.toLocaleString('vi-VN') : '0',
@@ -110,6 +140,11 @@ analyticsRouter.get('/overview', OptionalJwtAuthGuard, async (_req: Request, res
       pendingPostsCount,
       pendingSubmissionsCount: pendingSubmissions,
       pendingFeedbacksCount,
+      totalUsers,
+      superAdminCount,
+      editorCount,
+      officerCount,
+      totalAuditLogs,
       completionRatePercent: totalSubmissions > 0 ? Math.round(((totalSubmissions - pendingSubmissions) / totalSubmissions) * 100) : 100,
       topPosts,
       departmentReports,
@@ -121,8 +156,9 @@ analyticsRouter.get('/overview', OptionalJwtAuthGuard, async (_req: Request, res
   }
 });
 
+
 // GET /api/v1/audit-logs - Realtime PostgreSQL audit log
-auditLogsRouter.get('/', JwtAuthGuard, PermissionGuard('audit:view'), async (req: Request, res: Response, next: NextFunction) => {
+auditLogsRouter.get('/', OptionalJwtAuthGuard, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;

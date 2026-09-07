@@ -79,12 +79,11 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentPath, onNavigat
     pendingFeedbacks: number;
   }>({ pendingPosts: 0, pendingSubmissions: 0, pendingFeedbacks: 0 });
 
-  useEffect(() => {
-    // Load logged-in user profile from Backend API GET /api/v1/users/me
-    fetchApi<{ data: { user: any } }>('/v1/users/me')
+  const loadCurrentUser = () => {
+    fetchApi<any>('/v1/users/me')
       .then((res) => {
-        if (res && res.data && res.data.user) {
-          const u = res.data.user;
+        const u = res?.data?.user || res?.data || res;
+        if (u && (u.fullName || u.username)) {
           const updated = {
             fullName: u.fullName || u.username,
             email: u.email || 'canbo@mbs.hochiminhcity.gov.vn',
@@ -93,10 +92,21 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentPath, onNavigat
             permissions: u.permissions || [],
           };
           setCurrentUser(updated);
-          localStorage.setItem('mbs_admin_user', JSON.stringify(u));
+          localStorage.setItem('mbs_admin_user', JSON.stringify(updated));
         }
       })
       .catch(() => {});
+  };
+
+  useEffect(() => {
+    // Load logged-in user profile from Backend API GET /api/v1/users/me
+    loadCurrentUser();
+
+    // Listen for live matrix updates
+    const handlePermissionsUpdated = () => {
+      loadCurrentUser();
+    };
+    window.addEventListener('mbs_permissions_updated', handlePermissionsUpdated);
 
     // Fetch real-time badge counts from PostgreSQL DB via GET /api/v1/analytics/overview
     fetchApi<any>('/v1/analytics/overview')
@@ -109,6 +119,10 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentPath, onNavigat
         });
       })
       .catch(() => {});
+
+    return () => {
+      window.removeEventListener('mbs_permissions_updated', handlePermissionsUpdated);
+    };
   }, []);
 
   const roleMeta = ROLE_DEFINITIONS[currentUser.role] || ROLE_DEFINITIONS.SUPER_ADMIN;

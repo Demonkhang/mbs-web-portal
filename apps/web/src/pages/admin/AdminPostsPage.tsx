@@ -9,6 +9,7 @@ import {
   Edit,
   Trash2,
   Eye,
+  EyeOff,
   XCircle,
   Save
 } from 'lucide-react';
@@ -131,7 +132,7 @@ export const AdminPostsPage: React.FC<AdminPostsPageProps> = ({ onNavigate, subV
   // Load Static Pages from PostgreSQL API
   const loadStaticPages = async () => {
     try {
-      const res = await fetchApi<{ data: any[] }>('/v1/pages');
+      const res = await fetchApi<{ data: any[] }>('/v1/pages?includeHidden=true');
       if (res && res.data) {
         setStaticPages(res.data);
       }
@@ -215,13 +216,27 @@ export const AdminPostsPage: React.FC<AdminPostsPageProps> = ({ onNavigate, subV
     }
   };
 
-  const handleDeleteStaticPage = async (slug: string, title: string) => {
-    if (!['SUPER_ADMIN', 'ADMIN'].includes(userRole)) {
-      showToast('Không đủ quyền hạn', 'Chỉ Quản trị viên mới có quyền xóa trang tĩnh.', 'error');
-      return;
+  const handleToggleHideStaticPage = async (page: any) => {
+    try {
+      const res = await fetchApi<{ data: any }>(`/v1/pages/${page.slug}/toggle-visibility`, {
+        method: 'PATCH',
+      });
+      if (res && res.data) {
+        const isHidden = res.data.isHidden;
+        showToast(
+          isHidden ? 'Đã ẩn trang tĩnh' : 'Đã hiển thị trang tĩnh',
+          `Trang "${page.title}" hiện ${isHidden ? 'đã bị ẩn khỏi Cổng thông tin' : 'đã hiển thị lại công khai'}.`,
+          isHidden ? 'warning' : 'success'
+        );
+        loadStaticPages();
+      }
+    } catch (err: any) {
+      showToast('Lỗi ẩn/hiện trang', err.message || 'Không thể thay đổi trạng thái ẩn/hiện', 'error');
     }
+  };
 
-    if (!window.confirm(`Bạn có chắc chắn muốn xóa trang tĩnh "${title}" (Slug: /${slug})?`)) return;
+  const handleDeleteStaticPage = async (slug: string, title: string) => {
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa trang tĩnh "${title}" (Slug: /${slug}) khỏi CSDL PostgreSQL? Hành động này không thể hoàn tác.`)) return;
 
     try {
       await fetchApi(`/v1/pages/${slug}`, { method: 'DELETE' });
@@ -690,15 +705,29 @@ export const AdminPostsPage: React.FC<AdminPostsPageProps> = ({ onNavigate, subV
           <div className="divide-y divide-slate-800 border border-slate-800 rounded-xl overflow-hidden">
             {(staticPages.length > 0 ? staticPages : pagesList).map((page, idx) => (
               <div key={page.id || idx} className="p-4 bg-slate-950 hover:bg-slate-900 flex items-center justify-between transition-colors">
-                <div>
-                  <h4 className="font-bold text-white text-sm">{page.title}</h4>
-                  <span className="text-xs font-mono text-emerald-400">Slug: /{page.slug}</span>
-                  {page.summary && <p className="text-xs text-slate-400 mt-1 line-clamp-1">{page.summary}</p>}
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-bold text-white text-sm">{page.title}</h4>
+                    {page.isHidden ? (
+                      <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-800 text-amber-400 border border-amber-800/60 flex items-center gap-1">
+                        <EyeOff className="w-3 h-3 text-amber-400" /> Đã ẩn
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800 flex items-center gap-1">
+                        <Eye className="w-3 h-3 text-emerald-400" /> Đang hiển thị
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs font-mono text-emerald-400">Slug: /{page.slug}</div>
+                  {page.summary && <p className="text-xs text-slate-400 line-clamp-1">{page.summary}</p>}
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-slate-400 font-mono">
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400 font-mono hidden sm:inline mr-2">
                     Cập nhật: {page.updatedAt ? new Date(page.updatedAt).toLocaleDateString('vi-VN') : page.updatedAt || '12/01/2026'}
                   </span>
+
+                  {/* Edit Content Button */}
                   <Button
                     onClick={() => handleOpenEditPageModal(page)}
                     variant="outline"
@@ -707,15 +736,29 @@ export const AdminPostsPage: React.FC<AdminPostsPageProps> = ({ onNavigate, subV
                   >
                     <Edit className="w-3.5 h-3.5" /> Chỉnh sửa nội dung
                   </Button>
-                  {canDeletePost && !['gioi-thieu', 'chuc-nang-nhiem-vu', 'co-cau-to-chuc', 'danh-ba-can-bo'].includes(page.slug) && (
-                    <button
-                      onClick={() => handleDeleteStaticPage(page.slug, page.title)}
-                      className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
-                      title="Xóa trang tĩnh này"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
+
+                  {/* Toggle Hide/Show Button */}
+                  <button
+                    onClick={() => handleToggleHideStaticPage(page)}
+                    className={`px-2.5 py-1.5 rounded-lg border transition-all cursor-pointer flex items-center gap-1 text-xs font-bold ${
+                      page.isHidden
+                        ? 'bg-emerald-950 text-emerald-300 border-emerald-800 hover:bg-emerald-900'
+                        : 'bg-slate-900 text-amber-300 border-slate-700 hover:bg-slate-800'
+                    }`}
+                    title={page.isHidden ? 'Hiển thị lại trang tĩnh này trên Cổng thông tin' : 'Ẩn trang tĩnh này khỏi Cổng thông tin'}
+                  >
+                    {page.isHidden ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                    <span>{page.isHidden ? 'Hiện trang' : 'Ẩn trang'}</span>
+                  </button>
+
+                  {/* Delete Button */}
+                  <button
+                    onClick={() => handleDeleteStaticPage(page.slug, page.title)}
+                    className="p-1.5 hover:bg-rose-950/60 rounded-lg text-slate-400 hover:text-rose-400 border border-slate-800 hover:border-rose-800/60 transition-colors cursor-pointer"
+                    title="Xóa trang tĩnh này khỏi CSDL"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             ))}

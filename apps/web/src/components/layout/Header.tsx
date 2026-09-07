@@ -1,8 +1,34 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, Menu, X, ChevronDown, PhoneCall, ShieldCheck, ShieldAlert, FileText, Newspaper, Building2, HelpCircle, Layers, Calendar, Image as ImageIcon } from 'lucide-react';
+import { Search, Menu, X, ChevronDown, PhoneCall, ShieldCheck, ShieldAlert, FileText, Newspaper, Building2, HelpCircle, Layers, Calendar, Image as ImageIcon, Home } from 'lucide-react';
 import { NAV_LINKS, SITE_INFO } from '../../lib/constants';
 import { cn } from '../../lib/utils';
 import { MOCK_NEWS, MOCK_DOCUMENTS, MOCK_SERVICES } from '../../lib/mock-data';
+import { fetchApi } from '../../services/api-client';
+
+const getNavIcon = (label: string) => {
+  switch (label) {
+    case 'Trang chủ':
+      return <Home className="w-4 h-4 opacity-90 shrink-0" />;
+    case 'Giới thiệu':
+      return <Building2 className="w-4 h-4 opacity-90 shrink-0" />;
+    case 'Tin tức & Hoạt động':
+      return <Newspaper className="w-4 h-4 opacity-90 shrink-0" />;
+    case 'Văn bản pháp quy':
+      return <FileText className="w-4 h-4 opacity-90 shrink-0" />;
+    case 'Dịch vụ công':
+      return <Layers className="w-4 h-4 opacity-90 shrink-0" />;
+    case 'Lịch công tác':
+      return <Calendar className="w-4 h-4 opacity-90 shrink-0" />;
+    case 'Phản ánh môi trường':
+      return <ShieldAlert className="w-4 h-4 opacity-90 shrink-0" />;
+    case 'Hỏi đáp & FAQ':
+      return <HelpCircle className="w-4 h-4 opacity-90 shrink-0" />;
+    case 'Thư viện ảnh':
+      return <ImageIcon className="w-4 h-4 opacity-90 shrink-0" />;
+    default:
+      return null;
+  }
+};
 
 export interface HeaderProps {
   currentPath: string;
@@ -15,11 +41,35 @@ export const Header: React.FC<HeaderProps> = ({ currentPath, onNavigate, isHighC
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
+  const [visiblePageSlugs, setVisiblePageSlugs] = useState<string[]>([]);
   const [searchResults, setSearchResults] = useState<{
     news: typeof MOCK_NEWS;
     docs: typeof MOCK_DOCUMENTS;
     services: typeof MOCK_SERVICES;
   }>({ news: [], docs: [], services: [] });
+
+  useEffect(() => {
+    fetchApi<{ data: any[] }>('/v1/pages')
+      .then((res) => {
+        if (res && res.data) {
+          setVisiblePageSlugs(res.data.filter((p) => !p.isHidden).map((p) => p.slug));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const getFilteredChildren = (item: typeof NAV_LINKS[0]) => {
+    if (!item.children) return [];
+    if (item.label !== 'Giới thiệu' || visiblePageSlugs.length === 0) return item.children;
+
+    return item.children.filter((sub) => {
+      if (sub.href.includes('tab=functions')) return visiblePageSlugs.includes('chuc-nang-nhiem-vu');
+      if (sub.href.includes('tab=org')) return visiblePageSlugs.includes('co-cau-to-chuc');
+      if (sub.href.includes('tab=leaders')) return visiblePageSlugs.includes('gioi-thieu');
+      if (sub.href.includes('tab=directory')) return visiblePageSlugs.includes('danh-ba-can-bo');
+      return true;
+    });
+  };
 
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
@@ -227,15 +277,15 @@ export const Header: React.FC<HeaderProps> = ({ currentPath, onNavigate, isHighC
         </div>
       </div>
 
-      {/* Main Navigation Bar */}
+      {/* Main Navigation Bar - Centered UI/UX Professional Layout */}
       <nav className={cn(
-        'w-full border-t transition-colors shadow-inner hidden lg:block',
+        'w-full border-t border-b transition-colors shadow-sm hidden lg:block',
         isHighContrast
           ? 'bg-yellow-400 text-black border-yellow-500 font-bold'
-          : 'bg-emerald-800 text-white border-emerald-900'
+          : 'bg-gradient-to-r from-emerald-900 via-emerald-800 to-emerald-900 text-white border-emerald-900/80'
       )}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <ul className="flex items-center justify-between text-sm font-medium">
+        <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6">
+          <ul className="flex items-center justify-center gap-1 xl:gap-2 text-xs xl:text-sm font-bold py-2">
             {NAV_LINKS.map((item) => {
               const isCurrent = currentPath === item.href || (item.href !== '/' && currentPath.startsWith(item.href));
               const hasChildren = item.children && item.children.length > 0;
@@ -243,38 +293,41 @@ export const Header: React.FC<HeaderProps> = ({ currentPath, onNavigate, isHighC
               return (
                 <li
                   key={item.label}
-                  className="relative group py-2.5"
+                  className="relative group"
                   onMouseEnter={() => hasChildren && setActiveDropdown(item.label)}
                   onMouseLeave={() => setActiveDropdown(null)}
                 >
                   <button
                     onClick={() => handleLinkClick(item.href)}
                     className={cn(
-                      'inline-flex items-center gap-1.5 px-3 py-1 rounded-md transition-all whitespace-nowrap cursor-pointer',
+                      'inline-flex items-center gap-1.5 px-2.5 xl:px-3.5 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer text-xs xl:text-sm font-bold tracking-wide select-none',
                       isCurrent
-                        ? 'bg-emerald-950/70 text-amber-300 font-bold shadow-xs'
-                        : 'text-emerald-50 hover:bg-emerald-700 hover:text-white'
+                        ? 'bg-emerald-950/90 text-amber-300 shadow-md border border-emerald-500/40 ring-1 ring-emerald-500/30'
+                        : 'text-emerald-50 hover:bg-emerald-700/80 hover:text-white hover:shadow-xs hover:-translate-y-0.5'
                     )}
                   >
+                    {getNavIcon(item.label)}
                     <span>{item.label}</span>
-                    {hasChildren && <ChevronDown className="w-3.5 h-3.5 opacity-70 group-hover:rotate-180 transition-transform duration-200" />}
+                    {hasChildren && (
+                      <ChevronDown className="w-3.5 h-3.5 opacity-75 group-hover:rotate-180 transition-transform duration-200" />
+                    )}
                   </button>
 
-                  {/* Desktop Dropdown */}
+                  {/* Desktop Dropdown Menu */}
                   {hasChildren && activeDropdown === item.label && (
-                    <div className="absolute left-0 top-full pt-1 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-                      <div className="w-64 bg-white text-slate-800 rounded-xl shadow-xl border border-slate-200 py-2 overflow-hidden">
-                        {item.children!.map((subItem) => (
+                    <div className="absolute left-1/2 -translate-x-1/2 top-full pt-2 z-50 animate-in fade-in zoom-in-95 duration-150">
+                      <div className="w-64 bg-white text-slate-800 rounded-2xl shadow-2xl border border-slate-200/90 py-2.5 overflow-hidden">
+                        {getFilteredChildren(item).map((subItem) => (
                           <button
                             key={subItem.label}
                             onClick={(e) => {
                               e.stopPropagation();
                               handleLinkClick(subItem.href);
                             }}
-                            className="w-full text-left px-4 py-2.5 text-xs md:text-sm text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 hover:font-semibold transition-colors flex items-center justify-between cursor-pointer"
+                            className="w-full text-left px-4 py-2.5 text-xs xl:text-sm font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 transition-colors flex items-center justify-between cursor-pointer group/sub"
                           >
                             <span>{subItem.label}</span>
-                            <span className="text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity">›</span>
+                            <span className="text-emerald-600 font-bold opacity-0 group-hover/sub:opacity-100 transition-opacity">›</span>
                           </button>
                         ))}
                       </div>

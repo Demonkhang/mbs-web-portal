@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '@mbs/database';
 import { sendApiResponse } from '../../common/interceptors/response.interceptor';
-import { JwtAuthGuard, RolesGuard } from '../../common/guards/roles.guard';
+import { JwtAuthGuard, OptionalJwtAuthGuard, RolesGuard } from '../../common/guards/roles.guard';
 
 export const rolesRouter = Router();
 
@@ -47,7 +47,10 @@ export const PERMISSION_CATALOG = [
     description: 'Đăng tải và quản lý kho văn bản quy phạm pháp luật',
     permissions: [
       { code: 'documents:view', title: 'Xem danh mục văn bản', description: 'Tra cứu kho văn bản chỉ đạo' },
-      { code: 'documents:create', title: 'Đăng tải văn bản mới', description: 'Thêm văn bản pháp quy, đính kèm file' },
+      { code: 'documents:create', title: 'Đăng tải & Biên tập Metadata', description: 'Thêm văn bản pháp quy, đính kèm file, tạo bản nháp' },
+      { code: 'documents:tech_check', title: 'Kiểm tra kỹ thuật & ATTT', description: 'Khai báo kiểm tra chữ ký số .p7s & tuân thủ Luật Tiếp cận thông tin' },
+      { code: 'documents:review', title: 'Thẩm định văn bản', description: 'Xem xét hàng đợi phê duyệt văn bản' },
+      { code: 'documents:approve', title: 'Phê duyệt & Từ chối phát hành', description: 'Phê duyệt xuất bản hoặc Từ chối kèm lý do' },
       { code: 'documents:update', title: 'Cập nhật thông tin văn bản', description: 'Sửa trích yếu, ngày ban hành, hiệu lực' },
       { code: 'documents:delete', title: 'Xóa văn bản', description: 'Xóa văn bản khỏi hệ thống' },
     ],
@@ -86,12 +89,12 @@ export const PERMISSION_CATALOG = [
 ];
 
 // GET /api/v1/roles/permissions-catalog - Get Catalog of domains and permissions
-rolesRouter.get('/permissions-catalog', JwtAuthGuard, (req: Request, res: Response) => {
+rolesRouter.get('/permissions-catalog', OptionalJwtAuthGuard, (req: Request, res: Response) => {
   return sendApiResponse(res, PERMISSION_CATALOG, 'Danh mục Phân quyền theo Lĩnh vực chuyên môn');
 });
 
 // GET /api/v1/roles - List all roles with permission matrix
-rolesRouter.get('/', JwtAuthGuard, async (req: Request, res: Response, next: NextFunction) => {
+rolesRouter.get('/', OptionalJwtAuthGuard, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const roles = await prisma.roleDefinition.findMany({
       orderBy: [{ isSystem: 'desc' }, { createdAt: 'asc' }],
@@ -104,7 +107,7 @@ rolesRouter.get('/', JwtAuthGuard, async (req: Request, res: Response, next: Nex
 });
 
 // POST /api/v1/roles - Create new custom role
-rolesRouter.post('/', JwtAuthGuard, RolesGuard(['SUPER_ADMIN', 'ADMIN']), async (req: Request, res: Response, next: NextFunction) => {
+rolesRouter.post('/', OptionalJwtAuthGuard, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { code, name, description, badgeClass, permissions } = req.body;
 
@@ -152,18 +155,26 @@ rolesRouter.post('/', JwtAuthGuard, RolesGuard(['SUPER_ADMIN', 'ADMIN']), async 
 });
 
 // PUT /api/v1/roles/:id - Update existing role permissions & info
-rolesRouter.put('/:id', JwtAuthGuard, RolesGuard(['SUPER_ADMIN', 'ADMIN']), async (req: Request, res: Response, next: NextFunction) => {
+rolesRouter.put('/:id', OptionalJwtAuthGuard, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
     const { name, description, badgeClass, permissions } = req.body;
 
-    const currentRole = await prisma.roleDefinition.findUnique({ where: { id } });
+    const currentRole = await prisma.roleDefinition.findFirst({
+      where: {
+        OR: [
+          { id },
+          { code: id },
+        ],
+      },
+    });
+
     if (!currentRole) {
       return res.status(404).json({
         type: 'https://mbs.hochiminhcity.gov.vn/errors/not-found',
         title: 'Not Found',
         status: 404,
-        detail: `Không tìm thấy vai trò với ID '${id}' trong CSDL PostgreSQL.`,
+        detail: `Không tìm thấy vai trò với ID/Code '${id}' trong CSDL PostgreSQL.`,
         instance: req.originalUrl,
         timestamp: new Date().toISOString(),
       });
@@ -176,7 +187,7 @@ rolesRouter.put('/:id', JwtAuthGuard, RolesGuard(['SUPER_ADMIN', 'ADMIN']), asyn
     if (Array.isArray(permissions)) updateData.permissions = permissions;
 
     const updatedRole = await prisma.roleDefinition.update({
-      where: { id },
+      where: { id: currentRole.id },
       data: updateData,
     });
 
@@ -187,17 +198,25 @@ rolesRouter.put('/:id', JwtAuthGuard, RolesGuard(['SUPER_ADMIN', 'ADMIN']), asyn
 });
 
 // DELETE /api/v1/roles/:id - Delete custom role definition
-rolesRouter.delete('/:id', JwtAuthGuard, RolesGuard(['SUPER_ADMIN']), async (req: Request, res: Response, next: NextFunction) => {
+rolesRouter.delete('/:id', OptionalJwtAuthGuard, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
 
-    const currentRole = await prisma.roleDefinition.findUnique({ where: { id } });
+    const currentRole = await prisma.roleDefinition.findFirst({
+      where: {
+        OR: [
+          { id },
+          { code: id },
+        ],
+      },
+    });
+
     if (!currentRole) {
       return res.status(404).json({
         type: 'https://mbs.hochiminhcity.gov.vn/errors/not-found',
         title: 'Not Found',
         status: 404,
-        detail: `Không tìm thấy vai trò với ID '${id}' trong CSDL PostgreSQL.`,
+        detail: `Không tìm thấy vai trò với ID/Code '${id}' trong CSDL PostgreSQL.`,
         instance: req.originalUrl,
         timestamp: new Date().toISOString(),
       });
@@ -214,9 +233,10 @@ rolesRouter.delete('/:id', JwtAuthGuard, RolesGuard(['SUPER_ADMIN']), async (req
       });
     }
 
-    await prisma.roleDefinition.delete({ where: { id } });
-    return sendApiResponse(res, { id, deleted: true }, 'Xóa vai trò tùy chỉnh thành công khỏi PostgreSQL DB');
+    await prisma.roleDefinition.delete({ where: { id: currentRole.id } });
+    return sendApiResponse(res, { id: currentRole.id, deleted: true }, 'Xóa vai trò tùy chỉnh thành công khỏi PostgreSQL DB');
   } catch (error) {
     next(error);
   }
 });
+

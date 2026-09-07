@@ -2,47 +2,111 @@ import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, ArrowRight, ShieldCheck, Cpu, Flame, Leaf, Newspaper, Clock, ExternalLink } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { MOCK_NEWS } from '../../lib/mock-data';
 import { cn, formatDate } from '../../lib/utils';
+import { fetchApi } from '../../services/api-client';
 
 export interface HeroSliderProps {
   onNavigate: (path: string) => void;
 }
 
-export const HeroSlider: React.FC<HeroSliderProps> = ({ onNavigate }) => {
-  const slides = [
-    {
-      id: 'slide-1',
-      title: 'Đẩy mạnh chuyển đổi công nghệ đốt rác phát điện (Waste-to-Energy)',
-      subtitle: 'Hướng tới mục tiêu Net Zero và đô thị xanh thông minh của TP. Hồ Chí Minh đến năm 2030',
-      tag: 'CÔNG NGHỆ MÔI TRƯỜNG',
-      bgImage: 'https://images.unsplash.com/photo-1497435334941-8c899ee9e8e9?auto=format&fit=crop&w=1600&q=80',
-      actionText: 'Xem chi tiết dự án',
-      actionHref: '/tin-tuc/day-manh-chuyen-doi-cong-nghe-dot-rac-phat-dien-tai-tphcm',
-    },
-    {
-      id: 'slide-2',
-      title: 'Vận hành 18 trạm quan trắc môi trường tự động, liên tục 24/7',
-      subtitle: 'Minh bạch dữ liệu chỉ số chất lượng không khí (AQI) và nước thải sau xử lý tới toàn thể nhân dân',
-      tag: 'CHUYỂN ĐỔI SỐ',
-      bgImage: 'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?auto=format&fit=crop&w=1600&q=80',
-      actionText: 'Tra cứu chỉ số quan trắc',
-      actionHref: '/tin-tuc/trien-khai-he-thong-giam-sat-tu-dong-va-canh-bao-moi-truong',
-    },
-    {
-      id: 'slide-3',
-      title: 'Nâng cao chất lượng phục vụ nhân dân và doanh nghiệp qua Dịch vụ công trực tuyến',
-      subtitle: '100% thủ tục hành chính thuộc thẩm quyền Ban Quản lý MBS được tiếp nhận và xử lý cấp độ 3, 4',
-      tag: 'DỊCH VỤ CÔNG',
-      bgImage: 'https://images.unsplash.com/photo-1577495508048-b635879837f1?auto=format&fit=crop&w=1600&q=80',
-      actionText: 'Nộp hồ sơ trực tuyến',
-      actionHref: '/dich-vu-cong',
-    }
-  ];
+const defaultSlides = [
+  {
+    id: 'slide-1',
+    title: 'Đẩy mạnh chuyển đổi công nghệ đốt rác phát điện (Waste-to-Energy)',
+    subtitle: 'Hướng tới mục tiêu Net Zero và đô thị xanh thông minh của TP. Hồ Chí Minh đến năm 2030',
+    tag: 'CÔNG NGHỆ MÔI TRƯỜNG',
+    bgImage: 'https://images.unsplash.com/photo-1497435334941-8c899ee9e8e9?auto=format&fit=crop&w=1600&q=80',
+    actionText: 'Xem chi tiết dự án',
+    actionHref: '/tin-tuc/day-manh-chuyen-doi-cong-nghe-dot-rac-phat-dien-tai-tphcm',
+  },
+  {
+    id: 'slide-2',
+    title: 'Vận hành 18 trạm quan trắc môi trường tự động, liên tục 24/7',
+    subtitle: 'Minh bạch dữ liệu chỉ số chất lượng không khí (AQI) và nước thải sau xử lý tới toàn thể nhân dân',
+    tag: 'CHUYỂN ĐỔI SỐ',
+    bgImage: 'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?auto=format&fit=crop&w=1600&q=80',
+    actionText: 'Tra cứu chỉ số quan trắc',
+    actionHref: '/tin-tuc/trien-khai-he-thong-giam-sat-tu-dong-va-canh-bao-moi-truong',
+  },
+  {
+    id: 'slide-3',
+    title: 'Nâng cao chất lượng phục vụ nhân dân và doanh nghiệp qua Dịch vụ công trực tuyến',
+    subtitle: '100% thủ tục hành chính thuộc thẩm quyền Ban Quản lý MBS được tiếp nhận và xử lý cấp độ 3, 4',
+    tag: 'DỊCH VỤ CÔNG',
+    bgImage: 'https://images.unsplash.com/photo-1577495508048-b635879837f1?auto=format&fit=crop&w=1600&q=80',
+    actionText: 'Nộp hồ sơ trực tuyến',
+    actionHref: '/dich-vu-cong',
+  }
+];
 
+const defaultDirectives = [
+  {
+    title: 'Chỉ thị số 04/CT-UBND về việc tăng cường kiểm tra, xử lý mùi hôi tại các bãi rác Nam TP.HCM',
+    date: '15/02/2026',
+    slug: 'trien-khai-he-thong-giam-sat-tu-dong-va-canh-bao-moi-truong',
+    badge: 'Khẩn'
+  },
+  {
+    title: 'Kế hoạch triển khai cao điểm bảo đảm vệ sinh môi trường phục vụ sự kiện chính trị TP.HCM',
+    date: '14/02/2026',
+    slug: 'thong-bao-ke-hoach-tiep-nhan-va-dieu-phoi-rac-thai-dip-le',
+    badge: 'Chỉ đạo'
+  },
+  {
+    title: 'Công văn hỏa tốc về bảo đảm an toàn phòng chống cháy nổ tại các trạm xử lý chất thải mùa khô',
+    date: '12/02/2026',
+    slug: 'kiem-tra-cong-tac-ve-sinh-moi-truong-va-phong-chong-su-co-mua-kho',
+    badge: 'Hỏa tốc'
+  },
+];
+
+export const HeroSlider: React.FC<HeroSliderProps> = ({ onNavigate }) => {
+  const [slides, setSlides] = useState<any[]>(defaultSlides);
+  const [directives, setDirectives] = useState<any[]>(defaultDirectives);
   const [currentSlide, setCurrentSlide] = useState(0);
 
   useEffect(() => {
+    fetchApi<{ data: any[] }>('/v1/posts?status=PUBLISHED&limit=10')
+      .then((res) => {
+        if (res && Array.isArray(res.data) && res.data.length > 0) {
+          const livePosts = res.data;
+
+          // Map slides from live DB posts
+          const liveSlides = livePosts.slice(0, 4).map((p: any) => ({
+            id: p.id,
+            title: p.title,
+            subtitle: p.summary || p.title,
+            tag: p.category?.name?.toUpperCase() || 'CỔNG THÔNG TIN MBS',
+            bgImage: p.imageUrl || 'https://images.unsplash.com/photo-1497435334941-8c899ee9e8e9?auto=format&fit=crop&w=1600&q=80',
+            actionText: 'Xem chi tiết bài viết',
+            actionHref: `/tin-tuc/${p.slug || p.id}`,
+          }));
+          setSlides(liveSlides);
+
+          // Map directives from live DB posts
+          const directivePosts = livePosts.filter((p: any) =>
+            p.category?.slug === 'chi-dao-dieu-hanh' ||
+            p.category?.name?.toLowerCase().includes('chỉ đạo') ||
+            p.category?.name?.toLowerCase().includes('thông báo')
+          );
+          const selectedDirectives = directivePosts.length > 0 ? directivePosts : livePosts;
+
+          const liveDirectives = selectedDirectives.slice(0, 3).map((p: any) => ({
+            title: p.title,
+            date: p.publishedAt ? new Date(p.publishedAt).toLocaleDateString('vi-VN') : new Date(p.createdAt).toLocaleDateString('vi-VN'),
+            slug: p.slug || p.id,
+            badge: p.category?.name || 'Chỉ đạo'
+          }));
+          setDirectives(liveDirectives);
+        }
+      })
+      .catch((err) => {
+        console.error('Lỗi tải bài viết realtime từ CSDL PostgreSQL:', err);
+      });
+  }, []);
+
+  useEffect(() => {
+    if (slides.length === 0) return;
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % slides.length);
     }, 6000);
@@ -153,26 +217,7 @@ export const HeroSlider: React.FC<HeroSliderProps> = ({ onNavigate }) => {
 
               {/* Directives items list */}
               <div className="divide-y divide-slate-700/60 mt-2">
-                {[
-                  {
-                    title: 'Chỉ thị số 04/CT-UBND về việc tăng cường kiểm tra, xử lý mùi hôi tại các bãi rác Nam TP.HCM',
-                    date: '15/02/2026',
-                    slug: 'trien-khai-he-thong-giam-sat-tu-dong-va-canh-bao-moi-truong',
-                    badge: 'Khẩn'
-                  },
-                  {
-                    title: 'Kế hoạch triển khai cao điểm bảo đảm vệ sinh môi trường phục vụ sự kiện chính trị TP.HCM',
-                    date: '14/02/2026',
-                    slug: 'thong-bao-ke-hoach-tiep-nhan-va-dieu-phoi-rac-thai-dip-le',
-                    badge: 'Chỉ đạo'
-                  },
-                  {
-                    title: 'Công văn hỏa tốc về bảo đảm an toàn phòng chống cháy nổ tại các trạm xử lý chất thải mùa khô',
-                    date: '12/02/2026',
-                    slug: 'kiem-tra-cong-tac-ve-sinh-moi-truong-va-phong-chong-su-co-mua-kho',
-                    badge: 'Hỏa tốc'
-                  },
-                ].map((item, i) => (
+                {directives.map((item, i) => (
                   <div
                     key={i}
                     onClick={() => onNavigate(`/tin-tuc/${item.slug}`)}

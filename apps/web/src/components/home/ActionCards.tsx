@@ -1,5 +1,5 @@
 import React from 'react';
-import { FilePlus2, AlertTriangle, BookOpen, SearchCheck, ArrowRight, ShieldCheck, HelpCircle, PhoneCall } from 'lucide-react';
+import { Newspaper, Image as ImageIcon, BookOpen, Calendar, ArrowRight, ShieldCheck, HelpCircle, PhoneCall } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 export interface ActionCardsProps {
@@ -10,26 +10,26 @@ export interface ActionCardsProps {
 export const ActionCards: React.FC<ActionCardsProps> = ({ onNavigate, onOpenFeedback }) => {
   const cards = [
     {
-      id: 'dvc-nop-ho-so',
-      title: 'Dịch vụ công trực tuyến',
-      subtitle: 'Nộp hồ sơ cấp phép xử lý chất thải cấp độ 3, 4',
-      badge: 'Cấp độ 3 & 4',
-      icon: <FilePlus2 className="w-8 h-8 text-emerald-700" />,
-      actionText: 'Nộp hồ sơ trực tuyến',
+      id: 'tin-tuc-su-kien',
+      title: 'Tin tức & Hoạt động',
+      subtitle: 'Tin tức hoạt động chỉ đạo, sự kiện nổi bật của Ban Quản lý',
+      badge: 'Mới nhất',
+      icon: <Newspaper className="w-8 h-8 text-emerald-700" />,
+      actionText: 'Xem tin tức',
       accentColor: 'from-emerald-600 to-teal-700',
       bgHover: 'group-hover:border-emerald-500',
-      onClick: () => onNavigate('/dich-vu-cong'),
+      onClick: () => onNavigate('/tin-tuc'),
     },
     {
-      id: 'phan-anh-kien-nghi',
-      title: 'Phản ánh & Kiến nghị',
-      subtitle: 'Tiếp nhận phản ánh mùi hôi, sự cố môi trường 24/7',
-      badge: 'Trực 24/7',
-      icon: <AlertTriangle className="w-8 h-8 text-amber-600" />,
-      actionText: 'Gửi phản ánh ngay',
+      id: 'thu-vien-kho-anh',
+      title: 'Thư viện Kho ảnh',
+      subtitle: 'Hình ảnh tư liệu hoạt động, hạ tầng & thiết bị môi trường',
+      badge: 'Bộ sưu tập',
+      icon: <ImageIcon className="w-8 h-8 text-amber-600" />,
+      actionText: 'Khám phá kho ảnh',
       accentColor: 'from-amber-500 to-orange-600',
       bgHover: 'group-hover:border-amber-500',
-      onClick: onOpenFeedback,
+      onClick: () => onNavigate('/thu-vien-anh'),
     },
     {
       id: 'tra-cuu-van-ban',
@@ -43,15 +43,15 @@ export const ActionCards: React.FC<ActionCardsProps> = ({ onNavigate, onOpenFeed
       onClick: () => onNavigate('/van-ban'),
     },
     {
-      id: 'tra-cuu-ho-so',
-      title: 'Tra cứu tiến độ hồ sơ',
-      subtitle: 'Kiểm tra trạng thái thụ lý và ngày hẹn trả kết quả',
-      badge: 'Mã biên nhận',
-      icon: <SearchCheck className="w-8 h-8 text-rose-700" />,
-      actionText: 'Kiểm tra tình trạng',
+      id: 'lich-cong-tac',
+      title: 'Lịch công tác',
+      subtitle: 'Xem lịch họp, chương trình làm việc tuần của Ban Quản lý',
+      badge: 'Lịch tuần',
+      icon: <Calendar className="w-8 h-8 text-rose-700" />,
+      actionText: 'Xem lịch công tác',
       accentColor: 'from-rose-600 to-red-700',
       bgHover: 'group-hover:border-rose-500',
-      onClick: () => onNavigate('/dich-vu-cong#tra-cuu'),
+      onClick: () => onNavigate('/lich-cong-tac'),
     },
   ];
 

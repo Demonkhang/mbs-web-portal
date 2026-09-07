@@ -11,8 +11,8 @@ async function main() {
   console.log(' Seeding system Role Definitions & Permission Matrix...');
   const ALL_PERMISSIONS = [
     'users:view', 'users:create', 'users:update', 'users:toggle_status', 'users:delete', 'roles:manage', 'audit:view',
-    'posts:view', 'posts:create', 'posts:update_own', 'posts:update_all', 'posts:review', 'posts:approve', 'posts:delete', 'categories:manage', 'media:upload',
-    'documents:view', 'documents:create', 'documents:update', 'documents:delete',
+    'posts:view', 'posts:create', 'posts:edit_technical', 'posts:approve_leadership', 'posts:publish', 'posts:unpublish', 'posts:update_own', 'posts:update_all', 'posts:review', 'posts:approve', 'posts:delete', 'categories:manage', 'media:upload',
+    'documents:view', 'documents:create', 'documents:tech_check', 'documents:review', 'documents:approve', 'documents:update', 'documents:delete',
     'submissions:view', 'submissions:process', 'submissions:assign', 'forms:manage',
     'inquiries:view', 'inquiries:reply', 'inquiries:publish',
     'schedules:manage', 'polls:manage', 'faqs:manage'
@@ -40,7 +40,7 @@ async function main() {
       description: 'Quản lý cán bộ, chuyên mục, biểu mẫu dịch vụ công và phân quyền.',
       badgeClass: 'bg-purple-950 text-purple-300 border-purple-800',
       isSystem: true,
-      permissions: ALL_PERMISSIONS.filter((p) => p !== 'roles:manage'),
+      permissions: ALL_PERMISSIONS,
     },
   });
 
@@ -49,7 +49,7 @@ async function main() {
     update: {
       permissions: [
         'posts:view', 'posts:approve_leadership', 'posts:publish', 'posts:unpublish', 'posts:update_all',
-        'documents:view', 'audit:view'
+        'documents:view', 'documents:review', 'documents:approve', 'inquiries:view', 'inquiries:reply', 'inquiries:publish', 'audit:view'
       ],
     },
     create: {
@@ -60,7 +60,7 @@ async function main() {
       isSystem: true,
       permissions: [
         'posts:view', 'posts:approve_leadership', 'posts:publish', 'posts:unpublish', 'posts:update_all',
-        'documents:view', 'audit:view'
+        'documents:view', 'documents:review', 'documents:approve', 'inquiries:view', 'inquiries:reply', 'inquiries:publish', 'audit:view'
       ],
     },
   });
@@ -70,7 +70,8 @@ async function main() {
     update: {
       permissions: [
         'posts:view', 'posts:create', 'posts:edit_technical', 'posts:approve_leadership', 'posts:publish', 'posts:unpublish', 'posts:update_own', 'posts:update_all', 'posts:review', 'posts:approve', 'posts:delete',
-        'categories:manage', 'media:upload', 'documents:view', 'documents:create', 'documents:update', 'schedules:manage', 'faqs:manage'
+        'categories:manage', 'media:upload', 'documents:view', 'documents:create', 'documents:tech_check', 'documents:review', 'documents:approve', 'documents:update', 'documents:delete',
+        'schedules:manage', 'faqs:manage', 'polls:manage', 'inquiries:publish'
       ],
     },
     create: {
@@ -81,34 +82,53 @@ async function main() {
       isSystem: true,
       permissions: [
         'posts:view', 'posts:create', 'posts:edit_technical', 'posts:approve_leadership', 'posts:publish', 'posts:unpublish', 'posts:update_own', 'posts:update_all', 'posts:review', 'posts:approve', 'posts:delete',
-        'categories:manage', 'media:upload', 'documents:view', 'documents:create', 'documents:update', 'schedules:manage', 'faqs:manage'
+        'categories:manage', 'media:upload', 'documents:view', 'documents:create', 'documents:tech_check', 'documents:review', 'documents:approve', 'documents:update', 'documents:delete',
+        'schedules:manage', 'faqs:manage', 'polls:manage', 'inquiries:publish'
       ],
     },
   });
 
   await prisma.roleDefinition.upsert({
     where: { code: 'EDITOR' },
-    update: {},
+    update: {
+      permissions: [
+        'posts:view', 'posts:create', 'posts:edit_technical', 'posts:update_own', 'categories:manage', 'media:upload',
+        'documents:view', 'documents:create', 'documents:tech_check', 'documents:update'
+      ],
+    },
     create: {
       code: 'EDITOR',
       name: 'Biên tập viên Tin bài',
       description: 'Soạn thảo tin bài, trình duyệt nội dung bài viết và xem văn bản.',
       badgeClass: 'bg-sky-950 text-sky-300 border-sky-800',
       isSystem: true,
-      permissions: ['posts:view', 'posts:create', 'posts:update_own', 'media:upload', 'documents:view'],
+      permissions: [
+        'posts:view', 'posts:create', 'posts:edit_technical', 'posts:update_own', 'categories:manage', 'media:upload',
+        'documents:view', 'documents:create', 'documents:tech_check', 'documents:update'
+      ],
     },
   });
 
   await prisma.roleDefinition.upsert({
     where: { code: 'OFFICER' },
-    update: {},
+    update: {
+      permissions: [
+        'submissions:view', 'submissions:process', 'submissions:assign', 'forms:manage',
+        'inquiries:view', 'inquiries:reply', 'inquiries:publish',
+        'documents:view', 'documents:create', 'documents:tech_check', 'schedules:manage'
+      ],
+    },
     create: {
       code: 'OFFICER',
       name: 'Chuyên viên Thụ lý Hồ sơ',
       description: 'Tiếp nhận, thẩm định hồ sơ Dịch vụ công và phản ánh môi trường của người dân.',
       badgeClass: 'bg-amber-950 text-amber-300 border-amber-800',
       isSystem: true,
-      permissions: ['submissions:view', 'submissions:process', 'inquiries:view', 'inquiries:reply', 'documents:view', 'schedules:manage'],
+      permissions: [
+        'submissions:view', 'submissions:process', 'submissions:assign', 'forms:manage',
+        'inquiries:view', 'inquiries:reply', 'inquiries:publish',
+        'documents:view', 'documents:create', 'documents:tech_check', 'schedules:manage'
+      ],
     },
   });
 
@@ -304,6 +324,7 @@ async function main() {
       issueDate: new Date('2024-02-15'),
       effectiveDate: new Date('2024-03-01'),
       status: 'Còn hiệu lực',
+      approvalStatus: 'PUBLISHED',
       domain: 'Quản lý chất thải rắn',
       fileSize: '3.2 MB',
       fileUrl: '/uploads/documents/05-2024-QD-UBND.pdf',
@@ -326,12 +347,36 @@ async function main() {
       issueDate: new Date('2025-05-10'),
       effectiveDate: new Date('2025-07-01'),
       status: 'Còn hiệu lực',
+      approvalStatus: 'PUBLISHED',
       domain: 'Môi trường',
       fileSize: '4.8 MB',
       fileUrl: '/uploads/documents/12-2025-TT-BTNMT.pdf',
       downloadsCount: 980,
       viewsCount: 2100,
       fullText: 'Ưu tiên các công nghệ hiện đại, đốt rác phát điện (Waste-to-Energy), giảm thiểu chôn lấp hợp vệ sinh...',
+    },
+  });
+
+  await prisma.legalDocument.upsert({
+    where: { code: '08/2026/NĐ-CP' },
+    update: { approvalStatus: 'PENDING_REVIEW' },
+    create: {
+      id: 'doc-03',
+      code: '08/2026/NĐ-CP',
+      title: 'Nghị định Quy định chi tiết một số điều của Luật Bảo vệ môi trường (Trình duyệt Lãnh đạo)',
+      docType: 'Nghị định',
+      issuingAgency: 'Chính phủ',
+      signer: 'Lê Văn Thành',
+      issueDate: new Date('2026-01-10'),
+      effectiveDate: new Date('2026-02-01'),
+      status: 'Còn hiệu lực',
+      approvalStatus: 'PENDING_REVIEW',
+      domain: 'Quy hoạch môi trường',
+      fileSize: '5.1 MB',
+      fileUrl: '/uploads/documents/van-ban-mbs-2026.pdf',
+      downloadsCount: 120,
+      viewsCount: 450,
+      fullText: 'Nghị định quy định quy chuẩn kỹ thuật môi trường, quản lý chất thải nguy hại và lộ trình chuyển đổi xanh...',
     },
   });
 

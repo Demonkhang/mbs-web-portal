@@ -33,6 +33,9 @@ services:
       NODE_ENV: development
       DATABASE_URL: "postgresql://postgres:mbs_password_2026@postgres:5432/mbs_db?schema=public"
       JWT_SECRET: "mbs-docker-secret-key-2026"
+      LOCAL_UPLOAD_PATH: "./uploads"
+    volumes:
+      - ./uploads:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy

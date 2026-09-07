@@ -129,6 +129,10 @@ export const AdminRolesPermissionsPage: React.FC = () => {
       const updated: RoleDefinition = res?.data || res;
       setRoles(roles.map((r) => (r.id === updated.id ? updated : r)));
       setSelectedRole(updated);
+
+      // Trigger global permission update event for AdminLayout & active user session
+      window.dispatchEvent(new Event('mbs_permissions_updated'));
+
       showToast('Cập nhật thành công', `Đã lưu ma trận phân quyền cho vai trò ${updated.name}`, 'success');
     } catch (err: any) {
       showToast('Lỗi lưu phân quyền', err.message || 'Không thể lưu vai trò', 'error');

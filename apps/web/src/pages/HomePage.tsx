@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HeroSlider } from '../components/home/HeroSlider';
 import { ActionCards } from '../components/home/ActionCards';
 import { FeaturedNews } from '../components/home/FeaturedNews';
@@ -8,35 +8,55 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { SITE_INFO } from '../lib/constants';
 import { MOCK_FACILITIES } from '../lib/mock-data';
+import { fetchApi } from '../services/api-client';
 
 export interface HomePageProps {
   onNavigate: (path: string) => void;
   onOpenFeedback: () => void;
 }
 
-export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenFeedback }) => {
-  const [activeMediaTab, setActiveMediaTab] = useState<'photos' | 'videos'>('photos');
+const defaultGalleries = [
+  {
+    title: 'Hệ thống tiếp nhận và cân xe tự động tại Khu LHXLCT Đa Phước',
+    img: 'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?auto=format&fit=crop&w=600&q=80',
+    count: '12 ảnh',
+    date: '16/02/2026',
+  },
+  {
+    title: 'Trạm quan trắc không khí tự động và hệ thống phun xịt khử mùi vi sinh',
+    img: 'https://images.unsplash.com/photo-1497435334941-8c899ee9e8e9?auto=format&fit=crop&w=600&q=80',
+    count: '8 ảnh',
+    date: '14/02/2026',
+  },
+  {
+    title: 'Nhà máy phân loại tái chế và sản xuất phân compost tại Phước Hiệp',
+    img: 'https://images.unsplash.com/photo-1577495508048-b635879837f1?auto=format&fit=crop&w=600&q=80',
+    count: '15 ảnh',
+    date: '10/02/2026',
+  },
+];
 
-  const photoGalleries = [
-    {
-      title: 'Hệ thống tiếp nhận và cân xe tự động tại Khu LHXLCT Đa Phước',
-      img: 'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?auto=format&fit=crop&w=600&q=80',
-      count: '12 ảnh',
-      date: '16/02/2026',
-    },
-    {
-      title: 'Trạm quan trắc không khí tự động và hệ thống phun xịt khử mùi vi sinh',
-      img: 'https://images.unsplash.com/photo-1497435334941-8c899ee9e8e9?auto=format&fit=crop&w=600&q=80',
-      count: '8 ảnh',
-      date: '14/02/2026',
-    },
-    {
-      title: 'Nhà máy phân loại tái chế và sản xuất phân compost tại Phước Hiệp',
-      img: 'https://images.unsplash.com/photo-1577495508048-b635879837f1?auto=format&fit=crop&w=600&q=80',
-      count: '15 ảnh',
-      date: '10/02/2026',
-    },
-  ];
+export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenFeedback }) => {
+  const [photoGalleries, setPhotoGalleries] = useState<any[]>(defaultGalleries);
+
+  useEffect(() => {
+    fetchApi<{ data: { items: any[] } | any[] }>('/v1/media?limit=6')
+      .then((res) => {
+        const rawList = (res?.data as any)?.items || (Array.isArray(res?.data) ? res.data : []);
+        if (Array.isArray(rawList) && rawList.length > 0) {
+          const mapped = rawList.slice(0, 3).map((item: any, idx: number) => ({
+            title: item.title || item.originalName || defaultGalleries[idx % 3].title,
+            img: item.url || item.relativeUrl || defaultGalleries[idx % 3].img,
+            count: item.category ? `${item.category}` : 'Tư liệu',
+            date: item.createdAt ? new Date(item.createdAt).toLocaleDateString('vi-VN') : '2026',
+          }));
+          setPhotoGalleries(mapped);
+        }
+      })
+      .catch((err) => {
+        console.error('Lỗi tải dữ liệu media từ PostgreSQL DB:', err);
+      });
+  }, []);
 
   return (
     <div className="space-y-0">
@@ -140,7 +160,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenFeedback }
         </div>
       </section>
 
-      {/* 6. Media Gallery Preview */}
+      {/* 6. Media Gallery Preview - Dynamically fetched from PostgreSQL CSDL */}
       <section className="py-12 bg-slate-900 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4 mb-8">
@@ -154,14 +174,13 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenFeedback }
             </div>
 
             <div className="flex items-center gap-3">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onNavigate('/media')}
-                className="text-xs text-white border-slate-700 hover:bg-slate-800"
+              <button
+                onClick={() => onNavigate('/thu-vien-anh')}
+                className="px-4 py-2 rounded-xl bg-white text-slate-900 font-bold hover:bg-amber-400 hover:text-slate-950 text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
               >
-                Xem toàn bộ thư viện
-              </Button>
+                <span>Xem toàn bộ thư viện</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
             </div>
           </div>
 
@@ -169,8 +188,8 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenFeedback }
             {photoGalleries.map((item, idx) => (
               <div
                 key={idx}
-                onClick={() => onNavigate('/media')}
-                className="group cursor-pointer bg-slate-800 rounded-2xl overflow-hidden border border-slate-700 hover:border-amber-400 transition-all"
+                onClick={() => onNavigate('/thu-vien-anh')}
+                className="group cursor-pointer bg-slate-800 rounded-2xl overflow-hidden border border-slate-700 hover:border-amber-400 transition-all shadow-lg hover:shadow-2xl"
               >
                 <div className="relative aspect-video overflow-hidden">
                   <img
@@ -178,8 +197,8 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenFeedback }
                     alt={item.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
-                  <div className="absolute bottom-2 right-2 bg-black/70 backdrop-blur-xs text-white text-[11px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
-                    <Image className="w-3.5 h-3.5" />
+                  <div className="absolute bottom-2 right-2 bg-black/75 backdrop-blur-xs text-white text-[11px] font-bold px-2.5 py-0.5 rounded-lg flex items-center gap-1.5 shadow-sm">
+                    <Image className="w-3.5 h-3.5 text-amber-400" />
                     <span>{item.count}</span>
                   </div>
                 </div>
@@ -211,23 +230,21 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenFeedback }
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <Button
-                variant="primary"
-                size="lg"
+            <div className="flex flex-wrap items-center gap-3.5">
+              <button
                 onClick={onOpenFeedback}
-                className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-black shadow-lg"
+                className="px-5 py-3 rounded-xl bg-white text-emerald-950 font-black hover:bg-amber-300 hover:text-slate-950 shadow-xl transition-all text-xs sm:text-sm cursor-pointer flex items-center gap-2"
               >
-                Gửi phản ánh khẩn cấp
-              </Button>
-              <Button
-                variant="outline"
-                size="lg"
+                <PhoneCall className="w-4 h-4 text-emerald-700" />
+                <span>Gửi phản ánh khẩn cấp</span>
+              </button>
+              <button
                 onClick={() => onNavigate('/lien-he')}
-                className="border-white/40 text-white hover:bg-white/10"
+                className="px-5 py-3 rounded-xl bg-white/95 text-slate-900 font-extrabold hover:bg-white hover:scale-105 shadow-md transition-all text-xs sm:text-sm cursor-pointer border border-white flex items-center gap-2"
               >
-                Liên hệ cơ quan
-              </Button>
+                <Building2 className="w-4 h-4 text-slate-700" />
+                <span>Liên hệ cơ quan</span>
+              </button>
             </div>
           </div>
         </div>

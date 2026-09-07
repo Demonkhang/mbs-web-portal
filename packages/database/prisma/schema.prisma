@@ -166,24 +166,32 @@ model PostHistory {
 }
 
 model LegalDocument {
-  id             String    @id @default(uuid())
-  code           String    @unique
-  title          String
-  docType        String    @map("doc_type")
-  issuingAgency  String    @map("issuing_agency")
-  signer         String
-  issueDate      DateTime  @map("issue_date")
-  effectiveDate  DateTime  @map("effective_date")
-  expirationDate DateTime? @map("expiration_date")
-  status         String
-  domain         String
-  fileSize       String    @map("file_size")
-  fileUrl        String?   @map("file_url")
-  downloadsCount Int       @default(0) @map("downloads_count")
-  viewsCount     Int       @default(0) @map("views_count")
-  fullText       String    @db.Text @map("full_text")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
+  id                    String    @id @default(uuid())
+  code                  String    @unique
+  title                 String
+  docType               String    @map("doc_type")
+  issuingAgency         String    @map("issuing_agency")
+  signer                String
+  issueDate             DateTime  @map("issue_date")
+  effectiveDate         DateTime  @map("effective_date")
+  expirationDate        DateTime? @map("expiration_date")
+  status                String
+  approvalStatus        String    @default("PUBLISHED") @map("approval_status")
+  domain                String
+  fileSize              String    @map("file_size")
+  fileUrl               String?   @map("file_url")
+  p7sSignatureUrl       String?   @map("p7s_signature_url")
+  htmlContent           String?   @db.Text @map("html_content")
+  attachments           String[]  @default([])
+  isConfidentialChecked Boolean   @default(true) @map("is_confidential_checked")
+  authorId              String?   @map("author_id")
+  approverId            String?   @map("approver_id")
+  rejectionReason       String?   @db.Text @map("rejection_reason")
+  downloadsCount        Int       @default(0) @map("downloads_count")
+  viewsCount            Int       @default(0) @map("views_count")
+  fullText              String    @db.Text @map("full_text")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
 
   @@map("legal_documents")
 }
@@ -211,16 +219,26 @@ model PublicServiceSubmission {
 }
 
 model EnvironmentalFeedback {
-  id          String   @id @default(uuid())
-  ticketCode  String   @unique @map("ticket_code")
-  title       String
-  senderName  String   @map("sender_name")
-  senderPhone String   @map("sender_phone")
-  location    String?  @db.Text
-  photoUrl    String?  @map("photo_url") @db.Text
-  status      String   @default("da-tiep-nhan")
-  statusText  String?  @map("status_text") @db.Text
-  createdAt   DateTime @default(now()) @map("created_at")
+  id                 String   @id @default(uuid())
+  ticketCode         String   @unique @map("ticket_code")
+  title              String
+  senderName         String   @map("sender_name")
+  senderPhone        String   @map("sender_phone")
+  senderEmail        String?  @map("sender_email")
+  facility           String?  @map("facility")
+  category           String?  @map("category")
+  timeOccurrence     String?  @map("time_occurrence")
+  location           String?  @db.Text
+  content            String?  @db.Text
+  photoUrl           String?  @map("photo_url") @db.Text
+  status             String   @default("da-tiep-nhan")
+  statusText         String?  @map("status_text") @db.Text
+  assignedOfficer    String?  @map("assigned_officer")
+  assignedDepartment String?  @map("assigned_department")
+  currentStep        Int      @default(1) @map("current_step")
+  officialResponse   String?  @map("official_response") @db.Text
+  isPublic           Boolean  @default(false) @map("is_public")
+  createdAt          DateTime @default(now()) @map("created_at")
 
   @@map("environmental_feedbacks")
 }
@@ -336,6 +354,7 @@ model StaticPage {
   content         String   @db.Text
   metaTitle       String?  @map("meta_title")
   metaDescription String?  @map("meta_description")
+  isHidden        Boolean  @default(false) @map("is_hidden")
   updatedById     String?  @map("updated_by_id")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")

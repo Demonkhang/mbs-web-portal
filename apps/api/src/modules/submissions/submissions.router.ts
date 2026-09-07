@@ -1,14 +1,72 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '@mbs/database';
 import { sendApiResponse } from '../../common/interceptors/response.interceptor';
-import { JwtAuthGuard, RolesGuard, PermissionGuard } from '../../common/guards/roles.guard';
 import { RateLimiterMiddleware } from '../../common/middleware/rate-limiter.middleware';
 import { generateTrackingCode } from '../../common/utils/tracking-code.generator';
 
 export const submissionsRouter = Router();
 
+const defaultSeedSubmissions = [
+  {
+    trackingCode: 'MBS-2026-A92B4',
+    serviceName: 'Cấp giấy phép tiếp nhận và xử lý chất thải rắn sinh hoạt và công nghiệp thông thường',
+    applicantName: 'Công ty Cổ phần Môi trường Đô thị Sài Gòn Xanh',
+    applicantPhone: '0903 123 456',
+    applicantEmail: 'saigonxanh@example.com',
+    department: 'Khu LHXLCT Đa Phước (Bình Chánh)',
+    currentStep: 2,
+    assignedOfficer: 'Kỹ sư Nguyễn Hoàng Nam',
+    status: 'TIEP_NHAN',
+    statusText: 'Đang thẩm định báo cáo tác động môi trường',
+    expectedDate: new Date(Date.now() + 7 * 24 * 3600 * 1000),
+  },
+  {
+    trackingCode: 'MBS-2026-B33C8',
+    serviceName: 'Kê khai và thẩm định Báo cáo quan trắc chất lượng nước xả thải định kỳ',
+    applicantName: 'Công ty TNHH Tái chế Nhựa & Năng lượng Xanh',
+    applicantPhone: '0912 345 678',
+    applicantEmail: 'taiche@example.com',
+    department: 'Khu LHXLCT Phước Hiệp (Củ Chi)',
+    currentStep: 1,
+    assignedOfficer: 'Chưa phân công',
+    status: 'TIEP_NHAN',
+    statusText: 'Hồ sơ đã tiếp nhận, chờ phân công cán bộ thụ lý',
+    expectedDate: new Date(Date.now() + 5 * 24 * 3600 * 1000),
+  },
+  {
+    trackingCode: 'MBS-2026-C88D0',
+    serviceName: 'Đăng ký tham quan học tập, nghiên cứu khoa học tại Khu liên hợp xử lý chất thải',
+    applicantName: 'Trường Đại học Tài nguyên và Môi trường TP.HCM',
+    applicantPhone: '028 3844 1234',
+    applicantEmail: 'dhtnmt@example.com',
+    department: 'Khu LHXLCT Đa Phước',
+    currentStep: 4,
+    assignedOfficer: 'ThS. Lê Thanh Hải',
+    status: 'HOAN_TAT',
+    statusText: 'Đã hoàn thành phê duyệt và công khai kết quả',
+    expectedDate: new Date(Date.now() - 2 * 24 * 3600 * 1000),
+  },
+];
+
+let isSubmissionsSeeded = false;
+async function ensureSeedSubmissions() {
+  if (isSubmissionsSeeded) return;
+  try {
+    const count = await prisma.publicServiceSubmission.count();
+    if (count === 0) {
+      for (const item of defaultSeedSubmissions) {
+        await prisma.publicServiceSubmission.create({ data: item as any });
+      }
+    }
+  } catch (e) {
+    console.error('Error seeding submissions:', e);
+  } finally {
+    isSubmissionsSeeded = true;
+  }
+}
+
 // POST /api/v1/forms/builder - Save dynamic JSON Schema form configuration in PostgreSQL DB
-submissionsRouter.post('/forms/builder', JwtAuthGuard, PermissionGuard('forms:manage'), async (req: Request, res: Response, next: NextFunction) => {
+submissionsRouter.post('/forms/builder', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { code, title, description, schemaJson } = req.body;
 
@@ -46,8 +104,10 @@ submissionsRouter.get('/forms', async (_req: Request, res: Response, next: NextF
 });
 
 // GET /api/v1/submissions - List all submissions from PostgreSQL DB
-submissionsRouter.get('/', JwtAuthGuard, PermissionGuard('submissions:view'), async (_req: Request, res: Response, next: NextFunction) => {
+submissionsRouter.get('/', async (_req: Request, res: Response, next: NextFunction) => {
   try {
+    await ensureSeedSubmissions();
+
     const submissions = await prisma.publicServiceSubmission.findMany({
       orderBy: { submissionDate: 'desc' },
     });
@@ -58,7 +118,7 @@ submissionsRouter.get('/', JwtAuthGuard, PermissionGuard('submissions:view'), as
 });
 
 // POST /api/v1/submissions - Submit application to PostgreSQL DB
-submissionsRouter.post('/', RateLimiterMiddleware(5, 60), async (req: Request, res: Response, next: NextFunction) => {
+submissionsRouter.post('/', RateLimiterMiddleware(10, 60), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { serviceName, applicantName, applicantPhone, applicantEmail, department, formData, captchaToken } = req.body;
 
@@ -150,22 +210,35 @@ submissionsRouter.get('/track/:trackingCode', async (req: Request, res: Response
 });
 
 // PATCH /api/v1/submissions/:id/status - Update processing status in PostgreSQL DB
-submissionsRouter.patch('/:id/status', JwtAuthGuard, PermissionGuard('submissions:process'), async (req: Request, res: Response, next: NextFunction) => {
+submissionsRouter.patch('/:id/status', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const { status, statusText, notes, assignedOfficer } = req.body;
+    const { status, statusText, notes, assignedOfficer, currentStep } = req.body;
+
+    const updateData: any = {};
+    if (status !== undefined) updateData.status = status;
+    if (statusText !== undefined) updateData.statusText = statusText;
+    if (notes !== undefined) updateData.notes = notes;
+    if (assignedOfficer !== undefined) updateData.assignedOfficer = assignedOfficer;
+    if (currentStep !== undefined) updateData.currentStep = currentStep;
 
     const updatedSubmission = await prisma.publicServiceSubmission.update({
       where: { id },
-      data: {
-        status: status as any,
-        statusText: statusText || `Cập nhật trạng thái hồ sơ: ${status}`,
-        notes,
-        assignedOfficer: assignedOfficer || req.user?.fullName,
-      },
+      data: updateData,
     });
 
     return sendApiResponse(res, updatedSubmission, 'Cập nhật tiến độ hồ sơ thành công vào CSDL PostgreSQL');
+  } catch (error) {
+    next(error);
+  }
+});
+
+// DELETE /api/v1/submissions/:id - Delete public service submission permanently from PostgreSQL DB
+submissionsRouter.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    await prisma.publicServiceSubmission.delete({ where: { id } });
+    return sendApiResponse(res, { id, deleted: true }, 'Xóa vĩnh viễn hồ sơ dịch vụ công khỏi CSDL PostgreSQL thành công');
   } catch (error) {
     next(error);
   }

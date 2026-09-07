@@ -148,10 +148,11 @@ export const ROUTE_PERMISSION_MAP: Record<string, string> = {
  * Check if a role/user is permitted to visit a specific path
  */
 export function isRouteAllowed(role: UserRole | string, path: string, userPermissions?: string[]): boolean {
-  if (role === 'SUPER_ADMIN') return true;
+  // Always allow Dashboard & Login
+  if (path === '/admin/dashboard' || path === '/admin' || path === '/admin/login') return true;
 
   // Dynamic permission check if user permissions matrix array is present
-  if (userPermissions && userPermissions.length > 0) {
+  if (Array.isArray(userPermissions) && userPermissions.length > 0) {
     // Normalize path to base route (e.g. /admin/posts/123/edit -> /admin/posts)
     const baseRoute = Object.keys(ROUTE_PERMISSION_MAP).find(
       (r) => path === r || path.startsWith(r + '/')
@@ -159,8 +160,16 @@ export function isRouteAllowed(role: UserRole | string, path: string, userPermis
 
     const requiredPerm = ROUTE_PERMISSION_MAP[baseRoute];
     if (!requiredPerm || requiredPerm === 'dashboard:view') return true;
+
+    if (baseRoute === '/admin/approvals') {
+      return userPermissions.includes('posts:approve') || userPermissions.includes('posts:approve_leadership');
+    }
+
     return userPermissions.includes(requiredPerm);
   }
+
+  // Fallback for default system role when permissions array is not loaded
+  if (role === 'SUPER_ADMIN') return true;
 
   // Fallback to static role definitions
   const allowed = getAllowedAdminRoutes(role);
@@ -175,9 +184,7 @@ export function hasPermission(
   action: 'manage_users' | 'publish_posts' | 'write_posts' | 'delete_posts' | 'process_submissions' | 'manage_forms' | 'respond_feedback' | 'view_audit_logs',
   userPermissions?: string[]
 ): boolean {
-  if (role === 'SUPER_ADMIN') return true;
-
-  if (userPermissions && userPermissions.length > 0) {
+  if (Array.isArray(userPermissions) && userPermissions.length > 0) {
     const actionCodeMap: Record<string, string> = {
       manage_users: 'users:view',
       view_audit_logs: 'audit:view',
@@ -189,8 +196,15 @@ export function hasPermission(
       respond_feedback: 'inquiries:reply',
     };
     const code = actionCodeMap[action];
-    if (code) return userPermissions.includes(code);
+    if (code) {
+      if (action === 'publish_posts') {
+        return userPermissions.includes('posts:approve') || userPermissions.includes('posts:approve_leadership') || userPermissions.includes('posts:publish');
+      }
+      return userPermissions.includes(code);
+    }
   }
+
+  if (role === 'SUPER_ADMIN') return true;
 
   switch (action) {
     case 'manage_users':

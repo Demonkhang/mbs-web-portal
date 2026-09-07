@@ -8,7 +8,7 @@ import { Button } from '../components/ui/button';
 import { Pagination } from '../components/ui/pagination';
 import { DocViewer } from '../components/shared/DocViewer';
 import { useToast } from '../components/ui/toast';
-import { formatDate } from '../lib/utils';
+import { formatDate, downloadPdfFile } from '../lib/utils';
 import { fetchApi } from '../services/api-client';
 
 export interface DocumentsPageProps {
@@ -73,8 +73,9 @@ export const DocumentsPage: React.FC<DocumentsPageProps> = ({ onNavigate }) => {
 
   const handleDownload = (doc: any, e: React.MouseEvent) => {
     e.stopPropagation();
-    showToast('Bắt đầu tải văn bản', `Đang tải xuống ${doc.code} (${doc.fileSize || 'PDF'})...`, 'info');
+    downloadPdfFile(doc.fileUrl, doc.code, showToast);
   };
+
 
   return (
     <div className="bg-slate-50 min-h-screen py-8">

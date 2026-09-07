@@ -47,16 +47,7 @@ export const NAV_LINKS = [
       { label: 'Thông báo & Công khai', href: '/tin-tuc?cat=thong-bao' },
     ]
   },
-  {
-    label: 'Văn bản pháp quy',
-    href: '/van-ban',
-    children: [
-      { label: 'Nghị định Chính phủ', href: '/van-ban?type=Nghị định' },
-      { label: 'Thông tư Bộ Tài nguyên Môi trường', href: '/van-ban?type=Thông tư' },
-      { label: 'Quyết định UBND TP.HCM', href: '/van-ban?type=Quyết định' },
-      { label: 'Kế hoạch & Quy hoạch MBS', href: '/van-ban?domain=Quản lý chất thải rắn' },
-    ]
-  },
+  { label: 'Văn bản pháp quy', href: '/van-ban' },
   // {
   //   label: 'Dịch vụ công',
   //   href: '/dich-vu-cong',
@@ -68,8 +59,8 @@ export const NAV_LINKS = [
   //   ]
   // },
   { label: 'Lịch công tác', href: '/lich-cong-tac' },
-  { label: 'Phản ánh môi trường', href: '/phan-anh' },
-  { label: 'Hỏi đáp & FAQ', href: '/hoi-dap' },
+  // { label: 'Phản ánh môi trường', href: '/phan-anh' },
+  // { label: 'Hỏi đáp & FAQ', href: '/hoi-dap' },
   { label: 'Thư viện ảnh', href: '/thu-vien-anh' },
 ];
 

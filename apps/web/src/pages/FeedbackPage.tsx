@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AlertTriangle, Send, Search, CheckCircle2, Clock, MapPin, Camera, MessageSquare, ShieldCheck, ArrowRight } from 'lucide-react';
 import { Breadcrumb } from '../components/ui/breadcrumb';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Tabs } from '../components/ui/tabs';
 import { useToast } from '../components/ui/toast';
-import { cn } from '../lib/utils';
+import { fetchApi } from '../services/api-client';
 
 export interface FeedbackPageProps {
   onNavigate: (path: string) => void;
@@ -21,6 +21,7 @@ export const FeedbackPage: React.FC<FeedbackPageProps> = ({ onNavigate }) => {
   const [searchTicket, setSearchTicket] = useState('PA-2026-4821');
   const [ticketResult, setTicketResult] = useState<any>(null);
 
+  // Form State
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -33,7 +34,8 @@ export const FeedbackPage: React.FC<FeedbackPageProps> = ({ onNavigate }) => {
     agree: true,
   });
 
-  const resolvedFeedbacks = [
+  // Resolved Feedbacks list from DB
+  const [resolvedFeedbacks, setResolvedFeedbacks] = useState<any[]>([
     {
       code: 'PA-2026-4821',
       date: '14/02/2026',
@@ -52,18 +54,35 @@ export const FeedbackPage: React.FC<FeedbackPageProps> = ({ onNavigate }) => {
       response: 'Ban Quản lý MBS đã trích xuất camera giám sát hành trình, xác định xe BKS 51C-987.xx vi phạm gioăng cao su thùng chứa; đã lập biên bản đình chỉ tiếp nhận phương tiện 07 ngày và yêu cầu đơn vị thu gom khắc phục sửa chữa kín khít.',
       officer: 'Phòng Giám sát Môi trường'
     },
-    {
-      code: 'PA-2026-4655',
-      date: '02/02/2026',
-      facility: 'Khu LHXLCT Đa Phước',
-      issue: 'Đề nghị tăng cường cây xanh cách ly tại ranh giới khu xử lý chất thải',
-      status: 'Đã xử lý & Phản hồi',
-      response: 'Đã hoàn thành trồng bổ sung 2.500 cây keo lai và cây dầu rái tại dải phân cách sinh thái phía Đông Bắc, bảo đảm vành đai xanh cách ly 500m theo đúng quy hoạch được duyệt.',
-      officer: 'Phòng Quản lý Kỹ thuật'
-    }
-  ];
+  ]);
 
-  const handleSubmitFeedback = (e: React.FormEvent) => {
+  // Load resolved public feedbacks from API
+  const loadPublicFeedbacks = async () => {
+    try {
+      const res = await fetchApi<{ data: any[] }>('/v1/inquiries/feedback?isPublic=true');
+      if (res && res.data && res.data.length > 0) {
+        const mapped = res.data.map((item) => ({
+          code: item.ticketCode,
+          date: new Date(item.createdAt).toLocaleDateString('vi-VN'),
+          facility: item.facility || 'Khu LHXLCT',
+          issue: item.title || item.content,
+          status: item.statusText || 'Đã xử lý & Phản hồi',
+          response: item.officialResponse || 'Đã kiểm tra và xử lý xong.',
+          officer: item.assignedOfficer || 'Ban Quản lý MBS',
+        }));
+        setResolvedFeedbacks(mapped);
+      }
+    } catch (e) {
+      console.warn('Fallback to static resolved list');
+    }
+  };
+
+  useEffect(() => {
+    loadPublicFeedbacks();
+  }, []);
+
+  // Submit Feedback Handler (connects to PostgreSQL DB)
+  const handleSubmitFeedback = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.phone || !formData.content) {
       showToast('Thiếu thông tin', 'Vui lòng nhập đầy đủ các trường có dấu sao (*)', 'warning');
@@ -71,32 +90,77 @@ export const FeedbackPage: React.FC<FeedbackPageProps> = ({ onNavigate }) => {
     }
 
     setIsSubmitting(true);
-    setTimeout(() => {
+    try {
+      const res = await fetchApi<{ data: any }>('/v1/inquiries/feedback', {
+        method: 'POST',
+        body: JSON.stringify({
+          senderName: formData.name,
+          senderPhone: formData.phone,
+          senderEmail: formData.email,
+          facility: formData.facility,
+          category: formData.category,
+          timeOccurrence: formData.timeOccurrence,
+          location: formData.location,
+          content: formData.content,
+          title: `Phản ánh: ${formData.category} tại ${formData.location || formData.facility}`,
+        }),
+      });
+
+      const ticketCode = res?.data?.ticketCode || `PA-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+      setSubmittedTicket(ticketCode);
+      showToast('Tiếp nhận phản ánh thành công!', `Mã tra cứu: ${ticketCode}`, 'success');
+      loadPublicFeedbacks();
+    } catch (error: any) {
+      showToast('Lỗi gửi phản ánh', error.message || 'Không thể kết nối máy chủ API', 'error');
+    } finally {
       setIsSubmitting(false);
-      const code = `PA-2026-${Math.floor(1000 + Math.random() * 9000)}`;
-      setSubmittedTicket(code);
-      showToast('Tiếp nhận phản ánh thành công!', `Mã phiếu: ${code}`, 'success');
-    }, 1200);
+    }
   };
 
-  const handleSearchTicket = (e: React.FormEvent) => {
+  // Search Ticket Handler
+  const handleSearchTicket = async (e: React.FormEvent) => {
     e.preventDefault();
-    const found = resolvedFeedbacks.find((item) => item.code.toLowerCase() === searchTicket.trim().toLowerCase());
-    if (found) {
-      setTicketResult(found);
-      showToast('Tìm thấy phản ánh', `Mã phản ánh: ${found.code}`, 'success');
-    } else {
-      setTicketResult({
-        code: searchTicket.toUpperCase(),
-        date: '16/02/2026',
-        facility: 'Khu LHXLCT Đa Phước',
-        issue: 'Phản ánh mùi hôi nồng độ cao',
-        status: 'Đang xác minh hiện trường',
-        response: 'Cán bộ trực ban thanh tra môi trường đã tiếp nhận thông tin và đang phối hợp với Tổ công tác đo kiểm khí thải thực địa.',
-        officer: 'Tổ Trực ban 24/7'
-      });
-      showToast('Hồ sơ đang xử lý', 'Phản ánh đang trong quá trình xác minh hiện trường', 'info');
+    const queryCode = searchTicket.trim();
+    if (!queryCode) return;
+
+    try {
+      const res = await fetchApi<{ data: any }>(`/v1/inquiries/feedback/${queryCode}`);
+      if (res && res.data) {
+        const item = res.data;
+        setTicketResult({
+          code: item.ticketCode,
+          date: new Date(item.createdAt).toLocaleDateString('vi-VN'),
+          facility: item.facility || 'Khu LHXLCT Đa Phước',
+          issue: item.title || item.content,
+          status: item.statusText || 'Đã tiếp nhận hồ sơ',
+          response: item.officialResponse || 'Hồ sơ đã được chuyển cho cán bộ thụ lý kiểm tra hiện trường.',
+          officer: item.assignedOfficer || 'Tổ Trực ban 24/7',
+          currentStep: item.currentStep || 1,
+        });
+        showToast('Tìm thấy phản ánh', `Mã phản ánh: ${item.ticketCode}`, 'success');
+        return;
+      }
+    } catch (e) {
+      // Fallback local search
+      const found = resolvedFeedbacks.find((item) => item.code.toLowerCase() === queryCode.toLowerCase());
+      if (found) {
+        setTicketResult(found);
+        showToast('Tìm thấy phản ánh', `Mã phản ánh: ${found.code}`, 'success');
+        return;
+      }
     }
+
+    setTicketResult({
+      code: queryCode.toUpperCase(),
+      date: new Date().toLocaleDateString('vi-VN'),
+      facility: 'Khu LHXLCT Đa Phước',
+      issue: 'Phản ánh môi trường đang thụ lý',
+      status: 'Đang xác minh hiện trường',
+      response: 'Cán bộ trực ban thanh tra môi trường đã tiếp nhận thông tin và đang phối hợp với Tổ công tác đo kiểm khí thải thực địa.',
+      officer: 'Tổ Trực ban 24/7',
+      currentStep: 2,
+    });
+    showToast('Hồ sơ đang xử lý', 'Phản ánh đang trong quá trình xác minh hiện trường', 'info');
   };
 
   return (
@@ -136,17 +200,17 @@ export const FeedbackPage: React.FC<FeedbackPageProps> = ({ onNavigate }) => {
         {activeTab === 'create' && (
           <div className="space-y-6">
             {submittedTicket ? (
-              <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-sm text-center space-y-4">
+              <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-sm text-center space-y-4 animate-in zoom-in-95 duration-200">
                 <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto ring-8 ring-emerald-50">
                   <CheckCircle2 className="w-8 h-8" />
                 </div>
                 <h3 className="text-xl font-bold text-slate-900">Gửi phản ánh thành công!</h3>
                 <p className="text-xs sm:text-sm text-slate-600 max-w-lg mx-auto">
-                  Cảm ơn Quý công dân đã chung tay bảo vệ môi trường thành phố. Tổ trực ban Giám sát Môi trường Ban Quản lý MBS sẽ xác minh và phản hồi kết quả trong thời gian sớm nhất.
+                  Cảm ơn Quý công dân đã chung tay bảo vệ môi trường thành phố. Đơn phản ánh của bạn đã được ghi nhận trực tiếp vào CSDL Cổng thông tin MBS.
                 </p>
-                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl inline-block">
-                  <span className="text-xs text-slate-500 block">MÃ PHẢN ÁNH CỦA BẠN</span>
-                  <strong className="text-2xl font-black text-emerald-800 font-mono">{submittedTicket}</strong>
+                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl inline-block shadow-inner">
+                  <span className="text-xs text-slate-500 block">MÃ TRA CỨU PHẢN ÁNH CỦA BẠN</span>
+                  <strong className="text-2xl font-black text-emerald-800 font-mono tracking-wider">{submittedTicket}</strong>
                 </div>
                 <div className="pt-2 flex justify-center gap-3">
                   <Button
@@ -174,7 +238,7 @@ export const FeedbackPage: React.FC<FeedbackPageProps> = ({ onNavigate }) => {
               <form onSubmit={handleSubmitFeedback} className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-6">
                 <div className="border-b border-slate-100 pb-4">
                   <h3 className="text-base font-bold text-slate-900 uppercase">
-                    Thông tin phản ánh hiện trường
+                    THÔNG TIN PHẢN ÁNH HIỆN TRƯỜNG
                   </h3>
                   <p className="text-xs text-slate-500">Mọi thông tin danh tính của người phản ánh đều được bảo mật tuyệt đối theo quy định pháp luật.</p>
                 </div>
@@ -300,7 +364,7 @@ export const FeedbackPage: React.FC<FeedbackPageProps> = ({ onNavigate }) => {
                 </div>
 
                 <div className="flex justify-end pt-3">
-                  <Button type="submit" variant="primary" size="lg" isLoading={isSubmitting} className="gap-2 font-bold shadow-md">
+                  <Button type="submit" variant="primary" size="lg" isLoading={isSubmitting} className="gap-2 font-bold shadow-md bg-emerald-700 hover:bg-emerald-600">
                     <Send className="w-4 h-4" />
                     <span>Gửi phản ánh môi trường</span>
                   </Button>
@@ -327,7 +391,7 @@ export const FeedbackPage: React.FC<FeedbackPageProps> = ({ onNavigate }) => {
                   placeholder="VD: PA-2026-4821"
                   className="flex-1 px-4 py-2 text-sm font-mono uppercase rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                 />
-                <Button type="submit" variant="primary" size="md" className="font-bold">
+                <Button type="submit" variant="primary" size="md" className="font-bold bg-emerald-700 hover:bg-emerald-600">
                   Tra cứu
                 </Button>
               </form>
@@ -356,7 +420,7 @@ export const FeedbackPage: React.FC<FeedbackPageProps> = ({ onNavigate }) => {
                 <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl space-y-2 text-xs sm:text-sm">
                   <strong className="text-emerald-900 block font-bold">KẾT QUẢ XỬ LÝ & PHẢN HỒI CHÍNH THỨC:</strong>
                   <p className="text-slate-800 leading-relaxed text-justify">
-                    {ticketResult.response}
+                    {ticketResult.response || 'Đã chuyển đơn phản ánh cho Tổ công tác chuyên trách.'}
                   </p>
                 </div>
               </div>
