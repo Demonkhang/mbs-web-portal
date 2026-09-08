@@ -437,6 +437,97 @@ documentsRouter.patch('/:id/reject', JwtAuthGuard, PermissionGuard('documents:ap
   }
 });
 
+// Helper function to safely delete physical document files from disk (/uploads/documents/)
+const deleteDocumentFile = (fileUrl: string | null | undefined) => {
+  if (!fileUrl || typeof fileUrl !== 'string') return;
+  try {
+    if (!fileUrl.includes('uploads/documents/') && !fileUrl.includes('/uploads/documents/')) {
+      return;
+    }
+    const filename = path.basename(fileUrl);
+    if (!filename || filename === 'van-ban-mbs-2026.pdf') {
+      return; // Protect default fallback sample file
+    }
+    const filePath = path.join(docUploadDir, filename);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      console.log(`[CleanUp] Đã xóa tệp đĩa thực tế: ${filePath}`);
+    }
+  } catch (err) {
+    console.error(`[CleanUp] Lỗi khi xóa tệp đĩa ${fileUrl}:`, err);
+  }
+};
+
+// Helper function to cleanup all orphaned files in /uploads/documents/ not in Database
+export const cleanupOrphanedDocumentFiles = async () => {
+  try {
+    const allDocs = await prisma.legalDocument.findMany({
+      select: {
+        fileUrl: true,
+        p7sSignatureUrl: true,
+        attachments: true,
+      },
+    });
+
+    const activeFilenames = new Set<string>();
+    activeFilenames.add('van-ban-mbs-2026.pdf'); // protect sample fallback
+
+    allDocs.forEach((doc) => {
+      if (doc.fileUrl) activeFilenames.add(path.basename(doc.fileUrl));
+      if (doc.p7sSignatureUrl) activeFilenames.add(path.basename(doc.p7sSignatureUrl));
+      if (Array.isArray(doc.attachments)) {
+        doc.attachments.forEach((att: any) => {
+          if (typeof att === 'string') activeFilenames.add(path.basename(att));
+          else if (att?.url) activeFilenames.add(path.basename(att.url));
+        });
+      }
+    });
+
+    if (!fs.existsSync(docUploadDir)) return { deletedCount: 0, deletedFiles: [] };
+
+    const physicalFiles = fs.readdirSync(docUploadDir);
+    const deletedFiles: string[] = [];
+
+    physicalFiles.forEach((file) => {
+      if (!activeFilenames.has(file)) {
+        const filePath = path.join(docUploadDir, file);
+        try {
+          fs.unlinkSync(filePath);
+          deletedFiles.push(file);
+          console.log(`[CleanUp] Tự động xóa tệp rác không còn trong CSDL: ${file}`);
+        } catch (e) {
+          console.error(`[CleanUp] Lỗi khi xóa tệp rác ${file}:`, e);
+        }
+      }
+    });
+
+    return { deletedCount: deletedFiles.length, deletedFiles };
+  } catch (error) {
+    console.error('[CleanUp] Lỗi trong cleanupOrphanedDocumentFiles:', error);
+    return { deletedCount: 0, deletedFiles: [] };
+  }
+};
+
+// Auto-run orphan cleanup after server start
+setTimeout(() => {
+  cleanupOrphanedDocumentFiles().catch(() => {});
+}, 3000);
+
+// POST /api/v1/documents/cleanup-orphans - Explicitly trigger orphaned file cleanup
+documentsRouter.post('/cleanup-orphans', OptionalJwtAuthGuard, async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await cleanupOrphanedDocumentFiles();
+    return sendApiResponse(
+      res,
+      result,
+      `Đã dọn dẹp ${result.deletedCount} tệp rác trong mục uploads/documents/`,
+      200
+    );
+  } catch (error) {
+    next(error);
+  }
+});
+
 // PUT /api/v1/documents/:id - Edit document
 documentsRouter.put('/:id', OptionalJwtAuthGuard, async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -468,6 +559,14 @@ documentsRouter.put('/:id', OptionalJwtAuthGuard, async (req: Request, res: Resp
     const existing = await prisma.legalDocument.findUnique({ where: { id } });
     if (!existing) {
       return res.status(404).json({ title: 'Not Found', status: 404, detail: 'Không tìm thấy văn bản trong CSDL' });
+    }
+
+    // If fileUrl or p7sSignatureUrl is updated/replaced, clean up old file from disk
+    if (fileUrl !== undefined && existing.fileUrl && existing.fileUrl !== fileUrl) {
+      deleteDocumentFile(existing.fileUrl);
+    }
+    if (p7sSignatureUrl !== undefined && existing.p7sSignatureUrl && existing.p7sSignatureUrl !== p7sSignatureUrl) {
+      deleteDocumentFile(existing.p7sSignatureUrl);
     }
 
     const updateFields: any = {};
@@ -523,6 +622,18 @@ documentsRouter.delete('/:id', JwtAuthGuard, PermissionGuard('documents:delete')
 
     await prisma.legalDocument.delete({ where: { id } });
 
+    // Automatically delete physical PDF & P7S files from uploads/documents/
+    if (doc) {
+      deleteDocumentFile(doc.fileUrl);
+      deleteDocumentFile(doc.p7sSignatureUrl);
+      if (Array.isArray(doc.attachments)) {
+        doc.attachments.forEach((att: any) => {
+          if (typeof att === 'string') deleteDocumentFile(att);
+          else if (att?.url) deleteDocumentFile(att.url);
+        });
+      }
+    }
+
     await prisma.auditLog.create({
       data: {
         action: 'DELETE_DOCUMENT',
@@ -533,7 +644,7 @@ documentsRouter.delete('/:id', JwtAuthGuard, PermissionGuard('documents:delete')
       },
     });
 
-    return sendApiResponse(res, { id, deleted: true }, 'Xóa văn bản pháp quy thành công');
+    return sendApiResponse(res, { id, deleted: true }, 'Xóa văn bản pháp quy thành công và đã dọn tệp PDF đĩa');
   } catch (error) {
     next(error);
   }
