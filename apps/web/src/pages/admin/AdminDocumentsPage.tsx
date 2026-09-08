@@ -24,7 +24,8 @@ import {
   Send,
   Lock,
   Globe,
-  History
+  History,
+  X
 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
@@ -180,7 +181,12 @@ export const AdminDocumentsPage: React.FC<AdminDocumentsPageProps> = ({ onNaviga
       const formData = new FormData();
       formData.append('file', file);
 
-      const token = localStorage.getItem('mbs_access_token');
+      const token =
+        localStorage.getItem('mbs_admin_token') ||
+        localStorage.getItem('mbs_access_token') ||
+        localStorage.getItem('mbs_token') ||
+        localStorage.getItem('token');
+
       const headers: Record<string, string> = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
@@ -194,7 +200,7 @@ export const AdminDocumentsPage: React.FC<AdminDocumentsPageProps> = ({ onNaviga
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || data.message || 'Lỗi upload tệp PDF');
 
-      const uploaded = data.data?.[0];
+      const uploaded = Array.isArray(data.data) ? data.data[0] : data.data;
       if (uploaded?.url) {
         setPdfFileUrl(uploaded.url);
         setPdfFileName(file.name);
@@ -220,7 +226,12 @@ export const AdminDocumentsPage: React.FC<AdminDocumentsPageProps> = ({ onNaviga
       const formData = new FormData();
       formData.append('file', file);
 
-      const token = localStorage.getItem('mbs_access_token');
+      const token =
+        localStorage.getItem('mbs_admin_token') ||
+        localStorage.getItem('mbs_access_token') ||
+        localStorage.getItem('mbs_token') ||
+        localStorage.getItem('token');
+
       const headers: Record<string, string> = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
@@ -234,7 +245,7 @@ export const AdminDocumentsPage: React.FC<AdminDocumentsPageProps> = ({ onNaviga
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || data.message || 'Lỗi upload chữ ký số');
 
-      const uploaded = data.data?.[0];
+      const uploaded = Array.isArray(data.data) ? data.data[0] : data.data;
       if (uploaded?.url) {
         setP7sSignatureUrl(uploaded.url);
         setP7sFileName(file.name);
@@ -933,12 +944,35 @@ export const AdminDocumentsPage: React.FC<AdminDocumentsPageProps> = ({ onNaviga
               {/* Interactive Upload PDF Box */}
               <div
                 onClick={() => pdfInputRef.current?.click()}
-                className="border-2 border-dashed border-slate-800 hover:border-teal-500 bg-slate-950 hover:bg-slate-950/80 p-6 rounded-2xl text-center space-y-3 transition-colors cursor-pointer group"
+                className="border-2 border-dashed border-slate-800 hover:border-teal-500 bg-slate-950 hover:bg-slate-950/80 p-6 rounded-2xl text-center space-y-3 transition-colors cursor-pointer group relative"
               >
+                {/* Clear PDF 'X' button if file selected/uploaded */}
+                {(pdfFileName || pdfFileUrl) && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPdfFileUrl('');
+                      setPdfFileName('');
+                      setPdfFileSize('');
+                      if (pdfInputRef.current) pdfInputRef.current.value = '';
+                      showToast('Đã hủy tệp', 'Đã xóa lựa chọn tệp PDF', 'info');
+                    }}
+                    className="absolute top-3 right-3 p-1.5 rounded-full bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white transition-colors z-10 shadow-md"
+                    title="Xóa / Hủy chọn tệp PDF"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+
                 <FileUp className="w-10 h-10 text-teal-400 group-hover:scale-110 mx-auto transition-transform" />
                 <div>
                   <div className="text-xs font-bold text-white">
-                    {pdfFileName ? `Tệp đã chọn: ${pdfFileName}` : 'Nhấn để Tải lên File PDF/A văn bản chính thức'}
+                    {pdfFileName ? (
+                      <span className="text-teal-300 font-mono">Tệp đã chọn: {pdfFileName}</span>
+                    ) : (
+                      'Nhấn để Tải lên File PDF/A văn bản chính thức'
+                    )}
                   </div>
                   <p className="text-[11px] text-slate-500 mt-1">
                     {pdfFileSize ? `Dung lượng: ${pdfFileSize}` : 'Được lưu riêng biệt trong thư mục /uploads/documents/ (Không đưa vào Kho ảnh)'}
@@ -959,18 +993,38 @@ export const AdminDocumentsPage: React.FC<AdminDocumentsPageProps> = ({ onNaviga
               {/* Upload P7S Digital Signature Box */}
               <div
                 onClick={() => p7sInputRef.current?.click()}
-                className="bg-slate-950 p-4 rounded-xl border border-slate-800 hover:border-amber-500/50 space-y-2 cursor-pointer transition-colors"
+                className="bg-slate-950 p-4 rounded-xl border border-slate-800 hover:border-amber-500/50 space-y-2 cursor-pointer transition-colors relative"
               >
                 <div className="flex items-center justify-between text-xs">
-                  <label className="font-bold text-slate-300 flex items-center gap-1.5">
+                  <label className="font-bold text-slate-300 flex items-center gap-1.5 cursor-pointer">
                     <FileCode className="w-4 h-4 text-amber-400" /> Đóng kèm Chữ ký số Chuyên dùng (.p7s)
                   </label>
-                  <span className="text-[11px] text-amber-400 hover:underline">Tải lên tệp .p7s</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-amber-400 hover:underline">Tải lên tệp .p7s</span>
+                    {(p7sFileName || p7sSignatureUrl) && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setP7sSignatureUrl('');
+                          setP7sFileName('');
+                          if (p7sInputRef.current) p7sInputRef.current.value = '';
+                          showToast('Đã hủy chữ ký số', 'Đã xóa tệp chữ ký số .p7s', 'info');
+                        }}
+                        className="p-1 rounded-full bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white transition-colors"
+                        title="Xóa tệp chữ ký số .p7s"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {p7sFileName ? (
-                  <div className="text-xs text-amber-300 font-mono flex items-center gap-2 bg-amber-950/30 p-2 rounded-lg border border-amber-900/50">
-                    <Check className="w-4 h-4 text-amber-400" /> {p7sFileName}
+                  <div className="text-xs text-amber-300 font-mono flex items-center justify-between bg-amber-950/30 p-2 rounded-lg border border-amber-900/50">
+                    <span className="flex items-center gap-2">
+                      <Check className="w-4 h-4 text-amber-400" /> {p7sFileName}
+                    </span>
                   </div>
                 ) : (
                   <p className="text-[11px] text-slate-500">Chưa gắn chữ ký số PKI. Nhấp vào đây để chọn tệp .p7s</p>

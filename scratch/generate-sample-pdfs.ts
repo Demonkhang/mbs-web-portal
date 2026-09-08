@@ -1,51 +1,37 @@
 import fs from 'fs';
 import path from 'path';
 
-// Minimal valid PDF-1.4 content generator
-function createDummyPdfContent(title: string, code: string, agency: string): Buffer {
-  const content = `%PDF-1.4
-1 0 obj
-<< /Type /Catalog /Pages 2 0 R >>
-endobj
-2 0 obj
-<< /Type /Pages /Kinds [3 0 R] /Count 1 >>
-endobj
-3 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
-endobj
-4 0 obj
-<< /Length 200 >>
-stream
-BT
-/F1 18 Tf
-50 720 Td
-(${agency}) Tj
-0 -30 Td
-(SO: ${code}) Tj
-0 -40 Td
-(${title}) Tj
-0 -30 Td
-(VAN BAN QUY PHAM PHAP LUAT DANH CHO PORTAL MBS) Tj
-ET
-endstream
-endobj
-5 0 obj
-<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
-endobj
-xref
-0 6
-0000000000 65535 f 
-0000000009 00000 n 
-0000000058 00000 n 
-0000000115 00000 n 
-0000000244 00000 n 
-0000000494 00000 n 
-trailer
-<< /Size 6 /Root 1 0 R >>
-startxref
-563
-%%EOF`;
-  return Buffer.from(content, 'utf-8');
+// Valid PDF-1.4 generator with calculated xref byte offsets
+function createValidPdfContent(title: string, code: string, agency: string): Buffer {
+  const obj1 = '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n';
+  const obj2 = '2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n';
+  const obj3 = '3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n';
+
+  const streamText = `BT\n/F1 18 Tf\n50 720 Td\n(${agency}) Tj\n0 -30 Td\n(SO: ${code}) Tj\n0 -40 Td\n(${title}) Tj\n0 -30 Td\n(VAN BAN QUY PHAM PHAP LUAT DANH CHO PORTAL MBS) Tj\nET\n`;
+  const streamLen = Buffer.byteLength(streamText, 'utf-8');
+  const obj4 = `4 0 obj\n<< /Length ${streamLen} >>\nstream\n${streamText}endstream\nendobj\n`;
+  const obj5 = '5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n';
+
+  const header = '%PDF-1.4\n';
+  const objects = [obj1, obj2, obj3, obj4, obj5];
+  
+  let currentOffset = Buffer.byteLength(header, 'utf-8');
+  const offsets: number[] = [];
+
+  for (const obj of objects) {
+    offsets.push(currentOffset);
+    currentOffset += Buffer.byteLength(obj, 'utf-8');
+  }
+
+  const startXref = currentOffset;
+  let xref = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const off of offsets) {
+    xref += String(off).padStart(10, '0') + ' 00000 n \n';
+  }
+  xref += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${startXref}\n%%EOF\n`;
+
+  const fullPdf = header + objects.join('') + xref;
+  return Buffer.from(fullPdf, 'utf-8');
 }
 
 const docsDir = path.join(process.cwd(), 'uploads', 'documents');
@@ -62,8 +48,8 @@ const samplePdfs = [
 
 for (const pdf of samplePdfs) {
   const filePath = path.join(docsDir, pdf.filename);
-  fs.writeFileSync(filePath, createDummyPdfContent(pdf.title, pdf.code, pdf.agency));
-  console.log(`Generated sample PDF at: ${filePath}`);
+  fs.writeFileSync(filePath, createValidPdfContent(pdf.title, pdf.code, pdf.agency));
+  console.log(`Generated valid PDF at: ${filePath}`);
 }
 
 console.log('✅ Sample PDF files generated successfully in uploads/documents/');

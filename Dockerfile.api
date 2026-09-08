@@ -21,4 +21,4 @@ RUN npx prisma generate --schema=packages/database/prisma/schema.prisma
 
 EXPOSE 4000
 
-CMD ["sh", "-c", "npx prisma db push --schema=packages/database/prisma/schema.prisma && npx tsx scratch/seed-postgres.ts && npx tsx apps/api/src/main.ts"]
+CMD ["sh", "-c", "npx prisma db push --schema=packages/database/prisma/schema.prisma && npx tsx apps/api/src/main.ts"]

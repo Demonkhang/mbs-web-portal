@@ -31,7 +31,7 @@ const docUpload = multer({
 });
 
 // POST /api/v1/documents/upload - Upload PDF / P7S files specifically for Legal Documents (Does NOT touch Media table)
-documentsRouter.post('/upload', JwtAuthGuard, docUpload.single('file'), async (req: Request, res: Response, next: NextFunction) => {
+documentsRouter.post('/upload', OptionalJwtAuthGuard, docUpload.single('file'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     if (!req.file) {
       return res.status(400).json({
