@@ -232,17 +232,10 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenFeedback }
 
             <div className="flex flex-wrap items-center gap-3.5">
               <button
-                onClick={onOpenFeedback}
-                className="px-5 py-3 rounded-xl bg-white text-emerald-950 font-black hover:bg-amber-300 hover:text-slate-950 shadow-xl transition-all text-xs sm:text-sm cursor-pointer flex items-center gap-2"
-              >
-                <PhoneCall className="w-4 h-4 text-emerald-700" />
-                <span>Gửi phản ánh khẩn cấp</span>
-              </button>
-              <button
                 onClick={() => onNavigate('/lien-he')}
-                className="px-5 py-3 rounded-xl bg-white/95 text-slate-900 font-extrabold hover:bg-white hover:scale-105 shadow-md transition-all text-xs sm:text-sm cursor-pointer border border-white flex items-center gap-2"
+                className="px-5 py-3 rounded-xl bg-white text-slate-900 font-extrabold hover:bg-emerald-50 hover:scale-105 shadow-md transition-all text-xs sm:text-sm cursor-pointer border border-white flex items-center gap-2"
               >
-                <Building2 className="w-4 h-4 text-slate-700" />
+                <Building2 className="w-4 h-4 text-emerald-700" />
                 <span>Liên hệ cơ quan</span>
               </button>
             </div>

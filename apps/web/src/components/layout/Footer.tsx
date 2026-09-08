@@ -76,12 +76,16 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, isHighContrast }) =>
               </li>
               <li className="flex items-start gap-2">
                 <MapPin className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                <span><strong>Trụ sở phụ:</strong> {SITE_INFO.subAddress}</span>
+              </li>
+              {/* <li className="flex items-start gap-2">
+                <MapPin className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                 <span><strong>Khu XL Đa Phước:</strong> Xã Đa Phước, Bình Chánh, TP.HCM</span>
               </li>
               <li className="flex items-start gap-2">
                 <MapPin className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                 <span><strong>Khu XL Phước Hiệp:</strong> Xã Phước Hiệp, Củ Chi, TP.HCM</span>
-              </li>
+              </li> */}
               <li className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-emerald-400 shrink-0" />
                 <span>{SITE_INFO.workingHours}</span>
@@ -96,13 +100,10 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, isHighContrast }) =>
             </h5>
             <ul className="space-y-1.5 text-xs">
               {[
-                { label: 'Dịch vụ công trực tuyến', href: '/dich-vu-cong' },
+                { label: 'Tin tức sự kiện', href: '/tin-tuc' },
                 { label: 'Kho Văn bản pháp quy', href: '/van-ban' },
-                { label: 'Tra cứu tiến độ hồ sơ', href: '/dich-vu-cong#tra-cuu' },
                 { label: 'Sơ đồ tổ chức & Danh bạ', href: '/so-do-to-chuc' },
                 { label: 'Lịch công tác tuần', href: '/lich-cong-tac' },
-                { label: 'Gửi phản ánh môi trường', href: '/phan-anh' },
-                { label: 'Hỏi đáp & Giải đáp thắc mắc', href: '/hoi-dap' },
               ].map(item => (
                 <li key={item.label}>
                   <button

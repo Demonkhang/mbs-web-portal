@@ -192,7 +192,14 @@ export function App() {
     }
     if (currentPath.startsWith('/tin-tuc/')) {
       const slug = currentPath.replace('/tin-tuc/', '');
-      return <NewsDetailPage slug={slug} onNavigate={navigate} />;
+      return (
+        <NewsDetailPage
+          slug={slug}
+          onNavigate={navigate}
+          fontSize={fontSize}
+          onChangeFontSize={setFontSize}
+        />
+      );
     }
     if (currentPath.startsWith('/tin-tuc')) {
       const queryParams = new URLSearchParams(currentPath.split('?')[1] || '');
@@ -273,7 +280,12 @@ export function App() {
           <BreakingNewsTicker onNavigate={navigate} />
 
           {/* Dynamic Route Content */}
-          <main className={`flex-1 ${fontSizeClass}`}>
+          <main
+            className={`flex-1 transition-all duration-200 ${fontSizeClass}`}
+            style={{
+              fontSize: fontSize === 'large' ? '1.1rem' : fontSize === 'xlarge' ? '1.25rem' : '1rem'
+            }}
+          >
             {renderPublicPage()}
           </main>
 

@@ -55,7 +55,7 @@ export const Header: React.FC<HeaderProps> = ({ currentPath, onNavigate, isHighC
           setVisiblePageSlugs(res.data.filter((p) => !p.isHidden).map((p) => p.slug));
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const getFilteredChildren = (item: typeof NAV_LINKS[0]) => {

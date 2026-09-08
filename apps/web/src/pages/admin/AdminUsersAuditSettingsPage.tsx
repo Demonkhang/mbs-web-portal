@@ -46,6 +46,14 @@ export interface AuditLogItem {
   };
 }
 
+export interface RoleItem {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  isSystem?: boolean;
+}
+
 export interface AdminUsersAuditSettingsPageProps {
   onNavigate: (path: string) => void;
   subTab?: 'users' | 'audit' | 'settings';
@@ -58,6 +66,7 @@ export const AdminUsersAuditSettingsPage: React.FC<AdminUsersAuditSettingsPagePr
   // Live Data States directly from PostgreSQL Database (10 columns match)
   const [users, setUsers] = useState<UserItem[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
+  const [roles, setRoles] = useState<RoleItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [searchKeyword, setSearchKeyword] = useState<string>('');
@@ -110,8 +119,21 @@ export const AdminUsersAuditSettingsPage: React.FC<AdminUsersAuditSettingsPagePr
     }
   }, []);
 
+  // Fetch Live Roles from PostgreSQL DB via API GET /api/v1/roles
+  const loadRoles = useCallback(async () => {
+    try {
+      const res = await fetchApi<{ data: RoleItem[] }>('/v1/roles');
+      if (res && Array.isArray(res.data) && res.data.length > 0) {
+        setRoles(res.data);
+      }
+    } catch (err: any) {
+      console.error('Lỗi truy vấn danh sách vai trò từ DB:', err);
+    }
+  }, []);
+
   const refreshData = async () => {
     setIsRefreshing(true);
+    await loadRoles();
     if (activeTab === 'users') await loadUsers();
     if (activeTab === 'audit') await loadAuditLogs();
     setIsRefreshing(false);
@@ -121,12 +143,13 @@ export const AdminUsersAuditSettingsPage: React.FC<AdminUsersAuditSettingsPagePr
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
+      await loadRoles();
       if (activeTab === 'users') await loadUsers();
       if (activeTab === 'audit') await loadAuditLogs();
       setIsLoading(false);
     };
     fetchData();
-  }, [activeTab, loadUsers, loadAuditLogs]);
+  }, [activeTab, loadUsers, loadAuditLogs, loadRoles]);
 
   // Open Create Modal
   const openCreateModal = () => {
@@ -556,10 +579,18 @@ export const AdminUsersAuditSettingsPage: React.FC<AdminUsersAuditSettingsPagePr
                   onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white"
                 >
-                  <option value="SUPER_ADMIN">SUPER_ADMIN (Quản trị tối cao)</option>
-                  <option value="EDITOR_LEAD">EDITOR_LEAD (Trưởng ban biên tập)</option>
-                  <option value="EDITOR">EDITOR (Biên tập viên)</option>
-                  <option value="OFFICER">OFFICER (Chuyên viên thụ lý)</option>
+                  {(roles.length > 0 ? roles : [
+                    { code: 'SUPER_ADMIN', name: 'Quản trị tối cao (Super Admin)' },
+                    { code: 'ADMIN', name: 'Quản trị viên Hệ thống' },
+                    { code: 'APPROVER', name: 'Lãnh đạo Phê duyệt (Approver)' },
+                    { code: 'EDITOR_LEAD', name: 'Trưởng ban biên tập (Editor Lead)' },
+                    { code: 'EDITOR', name: 'Biên tập viên Tin bài' },
+                    { code: 'OFFICER', name: 'Chuyên viên Thụ lý' },
+                  ]).map((r) => (
+                    <option key={r.code} value={r.code}>
+                      {r.code} ({r.name})
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -645,10 +676,18 @@ export const AdminUsersAuditSettingsPage: React.FC<AdminUsersAuditSettingsPagePr
                   onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white"
                 >
-                  <option value="SUPER_ADMIN">SUPER_ADMIN (Quản trị tối cao)</option>
-                  <option value="EDITOR_LEAD">EDITOR_LEAD (Trưởng ban biên tập)</option>
-                  <option value="EDITOR">EDITOR (Biên tập viên)</option>
-                  <option value="OFFICER">OFFICER (Chuyên viên thụ lý)</option>
+                  {(roles.length > 0 ? roles : [
+                    { code: 'SUPER_ADMIN', name: 'Quản trị tối cao (Super Admin)' },
+                    { code: 'ADMIN', name: 'Quản trị viên Hệ thống' },
+                    { code: 'APPROVER', name: 'Lãnh đạo Phê duyệt (Approver)' },
+                    { code: 'EDITOR_LEAD', name: 'Trưởng ban biên tập (Editor Lead)' },
+                    { code: 'EDITOR', name: 'Biên tập viên Tin bài' },
+                    { code: 'OFFICER', name: 'Chuyên viên Thụ lý' },
+                  ]).map((r) => (
+                    <option key={r.code} value={r.code}>
+                      {r.code} ({r.name})
+                    </option>
+                  ))}
                 </select>
               </div>
 

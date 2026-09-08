@@ -3,19 +3,36 @@ import { Calendar, Eye, User, Share2, Printer, Check } from 'lucide-react';
 import { Breadcrumb } from '../components/ui/breadcrumb';
 import { Badge } from '../components/ui/badge';
 import { TTSReader } from '../components/shared/TTSReader';
-import { formatDate } from '../lib/utils';
+import { cn, formatDate } from '../lib/utils';
 import { useToast } from '../components/ui/toast';
 import { fetchApi } from '../services/api-client';
 
 export interface NewsDetailPageProps {
   slug: string;
   onNavigate: (path: string) => void;
+  fontSize?: 'normal' | 'large' | 'xlarge';
+  onChangeFontSize?: (size: 'normal' | 'large' | 'xlarge') => void;
 }
 
-export const NewsDetailPage: React.FC<NewsDetailPageProps> = ({ slug, onNavigate }) => {
+export const NewsDetailPage: React.FC<NewsDetailPageProps> = ({
+  slug,
+  onNavigate,
+  fontSize: propFontSize,
+  onChangeFontSize,
+}) => {
   const { showToast } = useToast();
   const [copied, setCopied] = useState(false);
-  const [fontSize, setFontSize] = useState<'normal' | 'large' | 'xlarge'>('normal');
+  const [localFontSize, setLocalFontSize] = useState<'normal' | 'large' | 'xlarge'>('normal');
+
+  const currentFontSize = propFontSize !== undefined ? propFontSize : localFontSize;
+
+  const handleFontSizeChange = (size: 'normal' | 'large' | 'xlarge') => {
+    if (onChangeFontSize) {
+      onChangeFontSize(size);
+    } else {
+      setLocalFontSize(size);
+    }
+  };
 
   const [article, setArticle] = useState<any>(null);
   const [relatedNews, setRelatedNews] = useState<any[]>([]);
@@ -101,7 +118,14 @@ export const NewsDetailPage: React.FC<NewsDetailPageProps> = ({ slug, onNavigate
               <span className="text-xs text-slate-400 font-mono">• MBS Official Post</span>
             </div>
 
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-slate-900 leading-tight">
+            <h1
+              className={cn(
+                'font-black text-slate-900 leading-tight transition-all duration-200',
+                currentFontSize === 'normal' && 'text-xl sm:text-2xl md:text-3xl',
+                currentFontSize === 'large' && 'text-2xl sm:text-3xl md:text-4xl',
+                currentFontSize === 'xlarge' && 'text-3xl sm:text-4xl md:text-5xl'
+              )}
+            >
               {article.title}
             </h1>
 
@@ -124,25 +148,34 @@ export const NewsDetailPage: React.FC<NewsDetailPageProps> = ({ slug, onNavigate
 
               {/* Utility buttons */}
               <div className="flex items-center gap-2">
-                <div className="flex items-center bg-slate-100 rounded-lg p-0.5 text-xs font-bold text-slate-700">
+                <div className="flex items-center bg-slate-100 rounded-lg p-0.5 text-xs font-bold text-slate-700 border border-slate-200">
                   <button
-                    onClick={() => setFontSize('normal')}
-                    className={`px-2 py-1 rounded ${fontSize === 'normal' ? 'bg-white shadow-xs text-emerald-800' : ''}`}
-                    title="Cỡ chữ chuẩn"
+                    onClick={() => handleFontSizeChange('normal')}
+                    className={cn(
+                      'px-2 py-1 rounded transition-colors cursor-pointer',
+                      currentFontSize === 'normal' ? 'bg-emerald-700 text-white shadow-xs' : 'hover:bg-slate-200 text-slate-700'
+                    )}
+                    title="Cỡ chữ chuẩn (A)"
                   >
                     A
                   </button>
                   <button
-                    onClick={() => setFontSize('large')}
-                    className={`px-2 py-1 rounded ${fontSize === 'large' ? 'bg-white shadow-xs text-emerald-800' : ''}`}
-                    title="Cỡ chữ lớn"
+                    onClick={() => handleFontSizeChange('large')}
+                    className={cn(
+                      'px-2 py-1 rounded transition-colors cursor-pointer',
+                      currentFontSize === 'large' ? 'bg-emerald-700 text-white shadow-xs' : 'hover:bg-slate-200 text-slate-700'
+                    )}
+                    title="Cỡ chữ lớn (A+)"
                   >
                     A+
                   </button>
                   <button
-                    onClick={() => setFontSize('xlarge')}
-                    className={`px-2 py-1 rounded ${fontSize === 'xlarge' ? 'bg-white shadow-xs text-emerald-800' : ''}`}
-                    title="Cỡ chữ rất lớn"
+                    onClick={() => handleFontSizeChange('xlarge')}
+                    className={cn(
+                      'px-2 py-1 rounded transition-colors cursor-pointer',
+                      currentFontSize === 'xlarge' ? 'bg-emerald-700 text-white shadow-xs' : 'hover:bg-slate-200 text-slate-700'
+                    )}
+                    title="Cỡ chữ rất lớn (A++)"
                   >
                     A++
                   </button>
@@ -172,7 +205,14 @@ export const NewsDetailPage: React.FC<NewsDetailPageProps> = ({ slug, onNavigate
 
           {/* Summary Lead Box */}
           {article.summary && (
-            <div className="p-4 sm:p-5 bg-emerald-50/70 border-l-4 border-emerald-700 rounded-r-xl text-slate-800 font-semibold text-xs sm:text-sm leading-relaxed">
+            <div
+              className={cn(
+                'p-4 sm:p-5 bg-emerald-50/70 border-l-4 border-emerald-700 rounded-r-xl text-slate-800 font-semibold leading-relaxed transition-all duration-200',
+                currentFontSize === 'normal' && 'text-xs sm:text-sm',
+                currentFontSize === 'large' && 'text-sm sm:text-base',
+                currentFontSize === 'xlarge' && 'text-base sm:text-lg'
+              )}
+            >
               {article.summary}
             </div>
           )}
@@ -195,9 +235,12 @@ export const NewsDetailPage: React.FC<NewsDetailPageProps> = ({ slug, onNavigate
 
           {/* Article Body Content */}
           <div
-            className={`space-y-4 text-slate-700 leading-relaxed ${
-              fontSize === 'large' ? 'text-base' : fontSize === 'xlarge' ? 'text-lg' : 'text-sm'
-            }`}
+            className={cn(
+              'space-y-4 text-slate-700 leading-relaxed transition-all duration-200',
+              currentFontSize === 'normal' && 'text-base sm:text-lg [&_p]:text-base [&_p]:sm:text-lg [&_p]:leading-relaxed [&_span]:text-base [&_li]:text-base',
+              currentFontSize === 'large' && 'text-lg sm:text-xl font-medium [&_p]:text-lg [&_p]:sm:text-xl [&_p]:leading-relaxed [&_span]:text-lg [&_li]:text-lg',
+              currentFontSize === 'xlarge' && 'text-xl sm:text-2xl font-medium [&_p]:text-xl [&_p]:sm:text-2xl [&_p]:leading-relaxed [&_span]:text-xl [&_li]:text-xl'
+            )}
             dangerouslySetInnerHTML={{ __html: article.content }}
           />
         </article>

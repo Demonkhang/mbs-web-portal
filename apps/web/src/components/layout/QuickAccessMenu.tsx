@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowUp, PhoneCall, AlertTriangle, Search, FileCheck } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { ArrowUp, PhoneCall, MessageCircle } from 'lucide-react';
 
 export interface QuickAccessMenuProps {
-  onNavigate: (path: string) => void;
+  onNavigate?: (path: string) => void;
   onOpenReportModal?: () => void;
   onOpenFeedback?: () => void;
 }
 
-export const QuickAccessMenu: React.FC<QuickAccessMenuProps> = ({ onNavigate, onOpenReportModal, onOpenFeedback }) => {
+export const QuickAccessMenu: React.FC<QuickAccessMenuProps> = () => {
   const [showBackToTop, setShowBackToTop] = useState(false);
 
   useEffect(() => {
@@ -29,39 +28,27 @@ export const QuickAccessMenu: React.FC<QuickAccessMenuProps> = ({ onNavigate, on
 
   return (
     <div className="fixed right-4 bottom-6 z-40 flex flex-col items-end space-y-2.5">
-      {/* Hotline Button */}
+      {/* Hotline / Liên hệ ngay Button */}
       <a
         href="tel:1900888868"
-        className="flex items-center gap-2 px-3 py-2.5 rounded-full bg-red-600 text-white shadow-xl hover:bg-red-700 hover:scale-105 transition-all group"
-        title="Gọi đường dây nóng 24/7"
+        className="flex items-center gap-2 px-3 py-2.5 rounded-full bg-red-600 text-white shadow-xl hover:bg-red-700 hover:scale-105 transition-all group font-bold text-xs"
+        title="Liên hệ ngay / Đường dây nóng 24/7"
       >
         <PhoneCall className="w-5 h-5 animate-pulse" />
-        <span className="hidden sm:inline text-xs font-bold pr-1">1900 8888 68</span>
+        <span className="hidden sm:inline pr-1">1900 8888 68</span>
       </a>
 
-      {/* Quick Report Petition */}
-      <button
-        onClick={() => {
-          if (onOpenFeedback) onOpenFeedback();
-          else if (onOpenReportModal) onOpenReportModal();
-          else onNavigate('/phan-anh');
-        }}
-        className="flex items-center gap-2 px-3 py-2.5 rounded-full bg-amber-500 text-slate-950 shadow-xl hover:bg-amber-400 hover:scale-105 transition-all group font-bold text-xs cursor-pointer"
-        title="Gửi phản ánh vi phạm môi trường"
+      {/* Zalo Contact Button */}
+      <a
+        href="https://zalo.me"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-2 px-3 py-2.5 rounded-full bg-[#0068FF] text-white shadow-xl hover:bg-blue-600 hover:scale-105 transition-all group font-bold text-xs"
+        title="Liên hệ qua Zalo OA"
       >
-        <AlertTriangle className="w-5 h-5 text-slate-950" />
-        <span className="hidden sm:inline pr-1">Phản ánh nhanh</span>
-      </button>
-
-      {/* Track Application */}
-      <button
-        onClick={() => onNavigate('/dich-vu-cong#tra-cuu')}
-        className="flex items-center gap-2 px-3 py-2.5 rounded-full bg-emerald-700 text-white shadow-xl hover:bg-emerald-800 hover:scale-105 transition-all group font-bold text-xs cursor-pointer"
-        title="Tra cứu hồ sơ hành chính"
-      >
-        <FileCheck className="w-5 h-5" />
-        <span className="hidden sm:inline pr-1">Tra cứu hồ sơ</span>
-      </button>
+        <MessageCircle className="w-5 h-5" />
+        <span className="hidden sm:inline pr-1">Zalo</span>
+      </a>
 
       {/* Back to top */}
       {showBackToTop && (

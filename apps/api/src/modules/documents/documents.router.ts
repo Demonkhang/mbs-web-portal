@@ -211,7 +211,7 @@ documentsRouter.get('/:id', async (req: Request, res: Response, next: NextFuncti
 });
 
 // GET /api/v1/documents/:id/history - Get document audit & activity timeline history
-documentsRouter.get('/:id/history', JwtAuthGuard, async (req: Request, res: Response, next: NextFunction) => {
+documentsRouter.get('/:id/history', OptionalJwtAuthGuard, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
     const doc = await prisma.legalDocument.findUnique({ where: { id } });
@@ -489,9 +489,6 @@ documentsRouter.put('/:id', OptionalJwtAuthGuard, async (req: Request, res: Resp
     if (fullText !== undefined) updateFields.fullText = fullText;
     if (isConfidentialChecked !== undefined) updateFields.isConfidentialChecked = Boolean(isConfidentialChecked);
     if (attachments !== undefined) updateFields.attachments = Array.isArray(attachments) ? attachments : [];
-    if (scheduledPublishDate !== undefined) {
-      updateFields.scheduledPublishDate = scheduledPublishDate ? new Date(scheduledPublishDate) : null;
-    }
     if (rejectionReason !== undefined) updateFields.rejectionReason = rejectionReason;
 
     const doc = await prisma.legalDocument.update({

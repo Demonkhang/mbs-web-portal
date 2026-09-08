@@ -3,7 +3,8 @@ export const SITE_INFO = {
   fullName: 'Ban Quản lý các Khu liên hợp xử lý chất thải thành phố Hồ Chí Minh',
   shortName: 'MBS',
   slogan: 'Vì một Thành phố Hồ Chí Minh Xanh - Sạch - Hiện đại',
-  address: 'Số 63 Lý Tự Trọng, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh',
+  address: 'Số 40 Võ Thị Sáu, Phường Tân Định, Quận 1, TP. Hồ Chí Minh',
+  subAddress: 'Số 24 Kỳ Đồng, Phường 9, Quận 3, TP. Hồ Chí Minh',
   branchAddress: 'Khu liên hợp xử lý chất thải Đa Phước, Xã Đa Phước, Huyện Bình Chánh, TP.HCM',
   hotline: '(028) 3822 1234',
   emergencyHotline: '1900 8888 68',
@@ -62,6 +63,7 @@ export const NAV_LINKS = [
   // { label: 'Phản ánh môi trường', href: '/phan-anh' },
   // { label: 'Hỏi đáp & FAQ', href: '/hoi-dap' },
   { label: 'Thư viện ảnh', href: '/thu-vien-anh' },
+  { label: 'Liên hệ', href: '/lien-he' },
 ];
 
 export const USEFUL_LINKS = [
