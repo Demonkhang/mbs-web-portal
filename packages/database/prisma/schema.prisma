@@ -404,6 +404,29 @@ model MediaCategory {
   @@map("media_categories")
 }
 
+enum BackupTriggerType {
+  AUTO_UPDATE
+  SCHEDULED
+  MANUAL
+}
+
+model SystemBackup {
+  id          String            @id @default(uuid())
+  filename    String            @unique
+  filepath    String
+  fileSize    Int               @map("file_size")
+  triggerType BackupTriggerType @default(MANUAL) @map("trigger_type")
+  description String?           @db.Text
+  checksum    String
+  recordCount Int               @default(0) @map("record_count")
+  status      String            @default("SUCCESS")
+  createdById String?           @map("created_by_id")
+  createdAt   DateTime          @default(now()) @map("created_at")
+
+  @@map("system_backups")
+}
+
+
 
 
 

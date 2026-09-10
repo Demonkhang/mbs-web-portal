@@ -83,6 +83,7 @@ export function getAllowedAdminRoutes(role: UserRole | string): string[] {
         '/admin/organization',
         '/admin/users',
         '/admin/roles',
+        '/admin/backup',
         '/admin/audit-logs',
       ];
 
@@ -141,6 +142,7 @@ export const ROUTE_PERMISSION_MAP: Record<string, string> = {
   '/admin/organization': 'users:view',
   '/admin/users': 'users:view',
   '/admin/roles': 'roles:manage',
+  '/admin/backup': 'system:backup',
   '/admin/audit-logs': 'audit:view',
 };
 

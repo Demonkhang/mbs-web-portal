@@ -5,6 +5,7 @@ import { sendApiResponse } from '../../common/interceptors/response.interceptor'
 import { redisService } from '../../common/services/redis.service';
 import { OptionalJwtAuthGuard } from '../../common/guards/roles.guard';
 import { parseWeeklyScheduleExcel } from './weekly-schedule-parser.service';
+import { BackupEngineService } from '../backup/backup-engine.service';
 
 export const utilitiesRouter = Router();
 
@@ -166,6 +167,9 @@ utilitiesRouter.post(['/batch-save', '/schedules/batch-save'], OptionalJwtAuthGu
     }
 
     if (mode === 'overwrite') {
+      // Trigger Auto-Backup before overwrite update
+      await BackupEngineService.triggerAutoBackupOnUpdate(`Cập nhật/Ghi đè Lịch làm việc tuần ${weekNumber}/${year}`, req.user?.id);
+
       await prisma.weeklySchedule.deleteMany({
         where: {
           weekNumber: parseInt(weekNumber, 10),

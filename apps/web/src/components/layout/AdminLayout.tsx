@@ -23,7 +23,8 @@ import {
   History,
   ShieldAlert,
   ArrowLeft,
-  ShieldCheck
+  ShieldCheck,
+  Database
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { fetchApi } from '../../services/api-client';
@@ -141,6 +142,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentPath, onNavigat
       items: [
         { label: 'Quản lý Cán bộ & Tài khoản', path: '/admin/users', icon: <UserCheck className="w-4 h-4" /> },
         { label: 'Ma trận Phân quyền (RBAC)', path: '/admin/roles', icon: <ShieldCheck className="w-4 h-4" /> },
+        { label: 'Sao lưu & Phục hồi Dữ liệu', path: '/admin/backup', icon: <Database className="w-4 h-4" /> },
         { label: 'Nhật ký & Audit Logs', path: '/admin/audit-logs', icon: <History className="w-4 h-4" /> },
       ],
     },

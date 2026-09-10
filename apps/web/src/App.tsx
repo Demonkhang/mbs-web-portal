@@ -38,6 +38,7 @@ import { AdminOrgStaffPage } from './pages/admin/AdminOrgStaffPage';
 import { AdminSchedulesPollsPage } from './pages/admin/AdminSchedulesPollsPage';
 import { AdminUsersAuditSettingsPage } from './pages/admin/AdminUsersAuditSettingsPage';
 import { AdminRolesPermissionsPage } from './pages/admin/AdminRolesPermissionsPage';
+import { AdminBackupPage } from './pages/admin/AdminBackupPage';
 
 export function App() {
   const [currentPath, setCurrentPath] = useState('/');
@@ -179,6 +180,9 @@ export function App() {
     }
     if (currentPath === '/admin/roles') {
       return <AdminRolesPermissionsPage />;
+    }
+    if (currentPath === '/admin/backup' || currentPath === '/admin/backups') {
+      return <AdminBackupPage />;
     }
 
     // Default admin dashboard
