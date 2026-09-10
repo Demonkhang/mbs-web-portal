@@ -4,6 +4,8 @@ import { sendApiResponse } from '../../common/interceptors/response.interceptor'
 import { redisService } from '../../common/services/redis.service';
 import { JwtAuthGuard, OptionalJwtAuthGuard, RolesGuard, PermissionGuard } from '../../common/guards/roles.guard';
 import { sanitizeHtmlContent } from '../../common/utils/sanitize.helper';
+import { NotificationService } from '../notifications/notification.service';
+import { NotificationType } from '@mbs/database';
 
 export const postsRouter = Router();
 
@@ -434,6 +436,34 @@ postsRouter.patch('/:id/submit', JwtAuthGuard, PermissionGuard('posts:create'), 
       },
     }).catch(() => {});
 
+    // Notification trigger
+    if (nextAssigneeId) {
+      NotificationService.createNotification({
+        userId: nextAssigneeId,
+        type: 'TASK_ASSIGNED',
+        title: 'Nhiệm vụ mới: Biên tập bài viết',
+        content: `${req.user!.fullName || 'Tác giả'} đã gửi bài viết "${post.title}" để biên tập.`,
+        linkUrl: '/admin/posts',
+        metadata: { postId: id, step: 2 },
+      }).catch((err) => console.error('Lỗi tạo thông báo submit post:', err));
+    } else {
+      prisma.user.findMany({
+        where: { role: { in: ['EDITOR_LEAD', 'APPROVER', 'ADMIN', 'SUPER_ADMIN'] } },
+        select: { id: true },
+      }).then((approvers) => {
+        approvers.forEach((u) => {
+          NotificationService.createNotification({
+            userId: u.id,
+            type: 'TASK_ASSIGNED',
+            title: 'Nhiệm vụ mới: Biên tập bài viết',
+            content: `${req.user!.fullName || 'Tác giả'} đã gửi bài viết "${post.title}" vào hàng đợi biên tập.`,
+            linkUrl: '/admin/posts',
+            metadata: { postId: id, step: 2 },
+          }).catch(() => {});
+        });
+      }).catch(() => {});
+    }
+
     redisService.clearPattern('posts:list:');
     return sendApiResponse(res, post, 'Đã gửi biên tập bài viết thành công (SUBMITTED)');
   } catch (error) {
@@ -519,6 +549,34 @@ postsRouter.patch('/:id/submit-approval', JwtAuthGuard, PermissionGuard('posts:e
       },
     }).catch(() => {});
 
+    // Notification trigger
+    if (nextAssigneeId) {
+      NotificationService.createNotification({
+        userId: nextAssigneeId,
+        type: 'TASK_ASSIGNED',
+        title: 'Nhiệm vụ mới: Phê duyệt bài viết',
+        content: `${req.user!.fullName || 'Thư ký'} đã trình duyệt bài viết "${post.title}".`,
+        linkUrl: '/admin/posts',
+        metadata: { postId: id, step: 3 },
+      }).catch((err) => console.error('Lỗi tạo thông báo submit-approval post:', err));
+    } else {
+      prisma.user.findMany({
+        where: { role: { in: ['APPROVER', 'ADMIN', 'SUPER_ADMIN'] } },
+        select: { id: true },
+      }).then((leaders) => {
+        leaders.forEach((u) => {
+          NotificationService.createNotification({
+            userId: u.id,
+            type: 'TASK_ASSIGNED',
+            title: 'Nhiệm vụ mới: Phê duyệt bài viết',
+            content: `${req.user!.fullName || 'Thư ký'} đã trình duyệt bài viết "${post.title}".`,
+            linkUrl: '/admin/posts',
+            metadata: { postId: id, step: 3 },
+          }).catch(() => {});
+        });
+      }).catch(() => {});
+    }
+
     redisService.clearPattern('posts:list:');
     return sendApiResponse(res, post, 'Đã trình Lãnh đạo phê duyệt bài viết (PENDING_APPROVAL)');
   } catch (error) {
@@ -573,6 +631,18 @@ postsRouter.patch('/:id/return', JwtAuthGuard, RolesGuard(['SUPER_ADMIN', 'ADMIN
         note: `Trả lại bài viết cho Tác giả chỉnh sửa. Lý do: ${reason.trim()}`,
       },
     }).catch(() => {});
+
+    // Notification trigger to Author
+    if (existingPost?.authorId) {
+      NotificationService.createNotification({
+        userId: existingPost.authorId,
+        type: 'POST_REJECTED',
+        title: 'Bài viết bị trả về để chỉnh sửa',
+        content: `Bài viết "${existingPost.title}" đã bị trả về. Lý do: ${reason.trim()}`,
+        linkUrl: '/admin/posts',
+        metadata: { postId: id, reason: reason.trim() },
+      }).catch((err) => console.error('Lỗi tạo thông báo return post:', err));
+    }
 
     redisService.clearPattern('posts:list:');
     return sendApiResponse(res, post, 'Đã trả bài viết về cho tác giả chỉnh sửa (DRAFT)');
@@ -651,6 +721,52 @@ postsRouter.patch('/:id/approve', JwtAuthGuard, RolesGuard(['SUPER_ADMIN', 'ADMI
       },
     }).catch(() => {});
 
+    // Notification trigger based on action
+    if (action === 'APPROVE') {
+      if (updatedPost.authorId) {
+        NotificationService.createNotification({
+          userId: updatedPost.authorId,
+          type: 'POST_APPROVED',
+          title: 'Bài viết đã được phê duyệt',
+          content: `Bài viết "${updatedPost.title}" đã được Lãnh đạo phê duyệt!${royaltyScore ? ` (Nhuận bút: ${royaltyScore} điểm)` : ''}`,
+          linkUrl: '/admin/posts',
+          metadata: { postId: id, royaltyScore },
+        }).catch((err) => console.error('Lỗi tạo thông báo approve post:', err));
+      }
+      if (nextAssigneeId) {
+        NotificationService.createNotification({
+          userId: nextAssigneeId,
+          type: 'TASK_ASSIGNED',
+          title: 'Nhiệm vụ mới: Xuất bản bài viết',
+          content: `Bài viết "${updatedPost.title}" đã được duyệt và phân công cho bạn xuất bản.`,
+          linkUrl: '/admin/posts',
+          metadata: { postId: id, step: 4 },
+        }).catch(() => {});
+      }
+    } else if (action === 'REJECT') {
+      if (updatedPost.authorId) {
+        NotificationService.createNotification({
+          userId: updatedPost.authorId,
+          type: 'POST_REJECTED',
+          title: 'Bài viết bị từ chối phê duyệt',
+          content: `Bài viết "${updatedPost.title}" đã bị từ chối. Lý do: ${reason || 'Không đạt yêu cầu'}`,
+          linkUrl: '/admin/posts',
+          metadata: { postId: id, reason },
+        }).catch((err) => console.error('Lỗi tạo thông báo reject post:', err));
+      }
+    } else if (action === 'RETURN') {
+      if (updatedPost.authorId) {
+        NotificationService.createNotification({
+          userId: updatedPost.authorId,
+          type: 'POST_REJECTED',
+          title: 'Bài viết bị trả về để chỉnh sửa',
+          content: `Bài viết "${updatedPost.title}" đã bị trả về. Lý do: ${reason || 'Yêu cầu sửa đổi'}`,
+          linkUrl: '/admin/posts',
+          metadata: { postId: id, reason },
+        }).catch((err) => console.error('Lỗi tạo thông báo return post:', err));
+      }
+    }
+
     redisService.clearPattern('posts:list:');
     const msg = action === 'APPROVE' ? 'Lãnh đạo đã phê duyệt bài viết và chấm nhuận bút (APPROVED)' : action === 'RETURN' ? 'Đã trả lại bài viết về cho tác giả chỉnh sửa' : 'Bài viết đã bị từ chối';
     return sendApiResponse(res, updatedPost, msg);
@@ -707,6 +823,20 @@ postsRouter.patch('/:id/publish', JwtAuthGuard, RolesGuard(['SUPER_ADMIN', 'ADMI
       },
     }).catch(() => {});
 
+    // Notification trigger to Author
+    if (updatedPost.authorId) {
+      NotificationService.createNotification({
+        userId: updatedPost.authorId,
+        type: 'POST_APPROVED',
+        title: isScheduled ? 'Bài viết đã được hẹn giờ xuất bản' : 'Bài viết đã được xuất bản công khai',
+        content: isScheduled
+          ? `Bài viết "${updatedPost.title}" đã được hẹn giờ xuất bản vào lúc ${scheduledDate?.toLocaleString('vi-VN')}`
+          : `Bài viết "${updatedPost.title}" đã được xuất bản ra Cổng thông tin công khai!`,
+        linkUrl: `/tin-tuc/${updatedPost.slug}`,
+        metadata: { postId: id, isScheduled, scheduledPublishAt },
+      }).catch((err) => console.error('Lỗi tạo thông báo publish post:', err));
+    }
+
     redisService.clearPattern('posts:list:');
     const msg = isScheduled
       ? `Đã hẹn giờ xuất bản bài viết vào lúc ${scheduledDate?.toLocaleString('vi-VN')}`
@@ -757,6 +887,18 @@ postsRouter.patch('/:id/unpublish', JwtAuthGuard, RolesGuard(['SUPER_ADMIN', 'AD
         note: `Gỡ bài khẩn cấp. Lý do: ${reason.trim()}`,
       },
     }).catch(() => {});
+
+    // Notification trigger to Author
+    if (updatedPost.authorId) {
+      NotificationService.createNotification({
+        userId: updatedPost.authorId,
+        type: 'SYSTEM_ALERT',
+        title: 'Bài viết bị thu hồi/gỡ khẩn cấp',
+        content: `Bài viết "${updatedPost.title}" đã bị thu hồi khỏi Cổng thông tin. Lý do: ${reason.trim()}`,
+        linkUrl: '/admin/posts',
+        metadata: { postId: id, reason: reason.trim() },
+      }).catch((err) => console.error('Lỗi tạo thông báo unpublish post:', err));
+    }
 
     redisService.clearPattern('posts:list:');
     return sendApiResponse(res, updatedPost, 'Đã thu hồi bài viết khẩn cấp thành công (UNPUBLISHED)');

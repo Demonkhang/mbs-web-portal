@@ -57,6 +57,7 @@ model User {
   updatedAt        DateTime        @updatedAt @map("updated_at")
   posts            Post[]
   auditLogs        AuditLog[]
+  notifications    Notification[]
 
   @@map("users")
 }
@@ -424,6 +425,32 @@ model SystemBackup {
   createdAt   DateTime          @default(now()) @map("created_at")
 
   @@map("system_backups")
+}
+
+enum NotificationType {
+  TASK_ASSIGNED
+  POST_APPROVED
+  POST_REJECTED
+  ROLE_UPDATED
+  SUBMISSION_NEW
+  SYSTEM_ALERT
+}
+
+model Notification {
+  id          String           @id @default(uuid())
+  userId      String           @map("user_id")
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        NotificationType @default(SYSTEM_ALERT)
+  title       String
+  content     String           @db.Text
+  linkUrl     String?          @map("link_url")
+  isRead      Boolean          @default(false) @map("is_read")
+  isEmailSent Boolean          @default(false) @map("is_email_sent")
+  metadata    Json?
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  @@index([userId, isRead])
+  @@map("notifications")
 }
 
 

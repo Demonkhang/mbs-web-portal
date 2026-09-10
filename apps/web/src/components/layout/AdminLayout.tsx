@@ -30,6 +30,8 @@ import { cn } from '../../lib/utils';
 import { fetchApi } from '../../services/api-client';
 import { isRouteAllowed, ROLE_DEFINITIONS, UserRole } from '../../lib/permission.utils';
 
+import { NotificationBellDropdown } from '../shared/NotificationBellDropdown';
+
 export interface AdminLayoutProps {
   currentPath: string;
   onNavigate: (path: string) => void;
@@ -300,6 +302,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentPath, onNavigat
 
           {/* User Profile Header Right */}
           <div className="flex items-center gap-3">
+            <NotificationBellDropdown onNavigate={onNavigate} />
+
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800">
               <img
                 src={currentUser.avatarUrl}

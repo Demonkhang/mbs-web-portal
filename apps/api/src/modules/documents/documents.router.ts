@@ -5,6 +5,7 @@ import path from 'path';
 import fs from 'fs';
 import { sendApiResponse } from '../../common/interceptors/response.interceptor';
 import { JwtAuthGuard, OptionalJwtAuthGuard, PermissionGuard } from '../../common/guards/roles.guard';
+import { NotificationService } from '../notifications/notification.service';
 
 export const documentsRouter = Router();
 
@@ -353,6 +354,23 @@ documentsRouter.patch('/:id/submit', JwtAuthGuard, PermissionGuard('documents:cr
       },
     });
 
+    // Notification trigger to Leadership
+    prisma.user.findMany({
+      where: { role: { in: ['APPROVER', 'ADMIN', 'SUPER_ADMIN'] } },
+      select: { id: true },
+    }).then((approvers) => {
+      approvers.forEach((u) => {
+        NotificationService.createNotification({
+          userId: u.id,
+          type: 'TASK_ASSIGNED',
+          title: 'Văn bản mới chờ phê duyệt',
+          content: `${user?.fullName || 'Cán bộ'} đã trình duyệt văn bản số hiệu [${updated.code}] - "${updated.title}".`,
+          linkUrl: '/admin/legal-docs',
+          metadata: { docId: id, code: updated.code },
+        }).catch(() => {});
+      });
+    }).catch(() => {});
+
     return sendApiResponse(res, updated, 'Đã trình duyệt văn bản lên Lãnh đạo thành công');
   } catch (error) {
     next(error);
@@ -389,6 +407,18 @@ documentsRouter.patch('/:id/approve', JwtAuthGuard, PermissionGuard('documents:a
         details: `Phê duyệt phát hành công khai văn bản [${updated.code}] - ${updated.title}`,
       },
     });
+
+    // Notification trigger to Document Creator / Author
+    if (existing.authorId) {
+      NotificationService.createNotification({
+        userId: existing.authorId,
+        type: 'POST_APPROVED',
+        title: 'Văn bản đã được phê duyệt phát hành',
+        content: `Văn bản số hiệu [${updated.code}] - "${updated.title}" đã được Lãnh đạo phê duyệt ban hành công khai!`,
+        linkUrl: '/admin/legal-docs',
+        metadata: { docId: id, code: updated.code },
+      }).catch((err) => console.error('Lỗi tạo thông báo approve document:', err));
+    }
 
     return sendApiResponse(res, updated, 'Phê duyệt & Xuất bản văn bản công khai thành công');
   } catch (error) {
@@ -430,6 +460,18 @@ documentsRouter.patch('/:id/reject', JwtAuthGuard, PermissionGuard('documents:ap
         details: `Từ chối phát hành văn bản [${updated.code}]. Lý do: ${reason.trim()}`,
       },
     });
+
+    // Notification trigger to Document Creator / Author
+    if (existing.authorId) {
+      NotificationService.createNotification({
+        userId: existing.authorId,
+        type: 'POST_REJECTED',
+        title: 'Văn bản bị từ chối phê duyệt',
+        content: `Văn bản số hiệu [${updated.code}] - "${updated.title}" đã bị từ chối. Lý do: ${reason.trim()}`,
+        linkUrl: '/admin/legal-docs',
+        metadata: { docId: id, code: updated.code, reason: reason.trim() },
+      }).catch((err) => console.error('Lỗi tạo thông báo reject document:', err));
+    }
 
     return sendApiResponse(res, updated, 'Đã trả lại văn bản yêu cầu chỉnh sửa');
   } catch (error) {
