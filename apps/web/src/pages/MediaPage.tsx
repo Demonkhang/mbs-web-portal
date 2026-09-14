@@ -27,6 +27,7 @@ import { Breadcrumb } from '../components/ui/breadcrumb';
 import { Badge } from '../components/ui/badge';
 import { Modal } from '../components/ui/modal';
 import { useToast } from '../components/ui/toast';
+import { normalizeMediaUrl } from '../lib/utils';
 
 export interface MediaPageProps {
   onNavigate: (path: string) => void;
@@ -63,7 +64,7 @@ export const MediaPage: React.FC<MediaPageProps> = ({ onNavigate }) => {
   const [dbMediaItems, setDbMediaItems] = useState<MediaItem[]>([]);
   const [isLoadingDb, setIsLoadingDb] = useState<boolean>(true);
 
-  const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+  const BASE_URL = (import.meta as any).env?.VITE_API_URL || '/api';
 
   // Fallback curated photos ONLY if database has 0 items
   const fallbackPhotos: MediaItem[] = [
@@ -112,7 +113,7 @@ export const MediaPage: React.FC<MediaPageProps> = ({ onNavigate }) => {
         const formatted: MediaItem[] = json.data.items.map((item: any) => ({
           id: item.id,
           title: item.title || item.originalName || item.filename,
-          url: item.url,
+          url: normalizeMediaUrl(item.url || item.relativeUrl),
           date: new Date(item.createdAt).toLocaleDateString('vi-VN'),
           category: item.category || 'Khu Đa Phước',
           desc: item.description || item.caption || `Tệp hình ảnh được tải lên CSDL PostgreSQL. Dung lượng: ${(item.size / 1024).toFixed(1)} KB.`,

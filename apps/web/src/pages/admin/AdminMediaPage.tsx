@@ -33,6 +33,7 @@ import {
 import { Button } from '../../components/ui/button';
 import { Modal } from '../../components/ui/modal';
 import { useToast } from '../../components/ui/toast';
+import { normalizeMediaUrl } from '../../lib/utils';
 
 export interface AdminMediaPageProps {
   onNavigate: (path: string) => void;
@@ -123,7 +124,7 @@ export const AdminMediaPage: React.FC<AdminMediaPageProps> = ({ onNavigate, subT
   const [isBatchDeleteOpen, setIsBatchDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+  const BASE_URL = (import.meta as any).env?.VITE_API_URL || '/api';
 
   const fetchCategories = async () => {
     try {
@@ -153,8 +154,11 @@ export const AdminMediaPage: React.FC<AdminMediaPageProps> = ({ onNavigate, subT
       }
       const response = await fetch(url);
       const data = await response.json();
-      if (data.data) {
-        setMediaList(data.data.items || []);
+      if (data.data && data.data.items) {
+        setMediaList(data.data.items.map((item: any) => ({
+          ...item,
+          url: normalizeMediaUrl(item.url || item.relativeUrl),
+        })));
       }
     } catch (error) {
       console.error('Error fetching media:', error);

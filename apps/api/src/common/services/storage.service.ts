@@ -34,14 +34,13 @@ export class StorageService {
     }
 
     const customPublicUrl = process.env.STORAGE_PUBLIC_URL;
-    if (customPublicUrl) {
+    if (customPublicUrl && !customPublicUrl.includes('localhost') && !customPublicUrl.includes('127.0.0.1')) {
       const cleanBase = customPublicUrl.replace(/\/+$/, '');
       return `${cleanBase}/${filename}`;
     }
 
-    const host = reqHost || 'localhost:4000';
-    const protocol = reqProtocol || 'http';
-    return `${protocol}://${host}/uploads/${filename}`;
+    // Return relative path by default to prevent hardcoded localhost issues across remote devices
+    return `/uploads/${filename}`;
   }
 
   public static async saveUploadedFile(

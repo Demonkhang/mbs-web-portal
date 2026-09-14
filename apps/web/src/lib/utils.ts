@@ -93,15 +93,59 @@ export class VietnameseTTS {
   }
 }
 
+export function normalizeMediaUrl(url?: string): string {
+  if (!url) return '';
+  let clean = url.trim();
+  // If the file URL contains hardcoded localhost or 127.0.0.1 (e.g. from local DB uploads),
+  // strip the domain part so it becomes a relative path like /uploads/...
+  if (
+    clean.startsWith('http://localhost') ||
+    clean.startsWith('https://localhost') ||
+    clean.startsWith('http://127.0.0.1') ||
+    clean.startsWith('https://127.0.0.1')
+  ) {
+    try {
+      const parsed = new URL(clean);
+      clean = parsed.pathname;
+    } catch {
+      clean = clean.replace(/^https?:\/\/[^\/]+/, '');
+    }
+  }
+  return clean;
+}
+
 export function getAbsolutePdfUrl(fileUrl?: string): string | null {
   if (!fileUrl) return null;
-  if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://') || fileUrl.startsWith('blob:')) {
-    return fileUrl;
+
+  let cleanPath = normalizeMediaUrl(fileUrl);
+  if (!cleanPath) return null;
+
+  // Blob URLs or external CDNs/S3 (e.g. https://s3.amazonaws.com)
+  if (cleanPath.startsWith('http://') || cleanPath.startsWith('https://') || cleanPath.startsWith('blob:')) {
+    return cleanPath;
   }
-  const apiBase = (import.meta as any).env?.VITE_API_URL || 'http://localhost:4000/api';
-  const serverHost = apiBase.replace(/\/api\/?$/, '');
-  const cleanPath = fileUrl.startsWith('/') ? fileUrl : `/${fileUrl}`;
-  return `${serverHost}${cleanPath}`;
+
+  if (!cleanPath.startsWith('/')) {
+    cleanPath = `/${cleanPath}`;
+  }
+
+  // If VITE_API_URL is explicitly set to an external remote domain/IP (not localhost), use it
+  const apiBase = (import.meta as any).env?.VITE_API_URL;
+  if (apiBase && (apiBase.startsWith('http://') || apiBase.startsWith('https://'))) {
+    try {
+      const urlObj = new URL(apiBase);
+      if (!urlObj.hostname.includes('localhost') && urlObj.hostname !== '127.0.0.1') {
+        const serverHost = apiBase.replace(/\/api\/?$/, '');
+        return `${serverHost}${cleanPath}`;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // Relative path works across ALL devices (Mobile, iPad, PC, Docker, LAN, WAN)
+  // because the browser resolves relative paths against window.location.origin
+  return cleanPath;
 }
 
 export async function downloadPdfFile(
