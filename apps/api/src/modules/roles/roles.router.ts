@@ -17,6 +17,7 @@ export const PERMISSION_CATALOG = [
       { code: 'users:update', title: 'Chỉnh sửa tài khoản', description: 'Cập nhật phòng ban, họ tên, đổi vai trò' },
       { code: 'users:toggle_status', title: 'Khóa/Mở khóa tài khoản', description: 'Tạm ngưng hoặc kích hoạt lại tài khoản' },
       { code: 'users:delete', title: 'Xóa tài khoản', description: 'Xóa tài khoản cán bộ khỏi CSDL' },
+      { code: 'directory:manage', title: 'Quản lý Danh bạ Điện tử Cán bộ & Phòng ban', description: 'Toàn quyền cấu hình Đơn vị, Phòng ban, Cán bộ máy lẻ hiển thị trên Portal' },
       { code: 'roles:manage', title: 'Quản lý Phân quyền & Vai trò', description: 'Tạo vai trò mới và sửa ma trận quyền' },
       { code: 'audit:view', title: 'Xem Nhật ký Audit Logs', description: 'Tra cứu lịch sử thao tác hệ thống' },
       { code: 'system:backup', title: 'Sao lưu & Phục hồi Dữ liệu', description: 'Toàn quyền tạo bản sao lưu, phục hồi và tải file snapshot hệ thống' },

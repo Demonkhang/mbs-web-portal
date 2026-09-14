@@ -26,6 +26,7 @@ export const OrgStructurePage: React.FC<OrgStructurePageProps> = ({ onNavigate, 
   const [searchDirectory, setSearchDirectory] = useState('');
   const [pageData, setPageData] = useState<any | null>(null);
   const [allPages, setAllPages] = useState<any[]>([]);
+  const [dbStaffList, setDbStaffList] = useState<any[]>([]);
 
   useEffect(() => {
     if (initialTab) {
@@ -34,11 +35,20 @@ export const OrgStructurePage: React.FC<OrgStructurePageProps> = ({ onNavigate, 
   }, [initialTab]);
 
   useEffect(() => {
-    // Load all static pages to generate dynamic tabs (Public view loads visible pages)
+    // Load all static pages to generate dynamic tabs
     fetchApi<{ data: any[] }>('/v1/pages')
       .then((res) => {
         if (res && res.data) {
           setAllPages(res.data);
+        }
+      })
+      .catch(() => {});
+
+    // Load staff directory from PostgreSQL DB
+    fetchApi<{ data: any[] }>('/v1/directory/staff')
+      .then((res) => {
+        if (res && res.data) {
+          setDbStaffList(res.data);
         }
       })
       .catch(() => {});
@@ -97,27 +107,28 @@ export const OrgStructurePage: React.FC<OrgStructurePageProps> = ({ onNavigate, 
     })),
   ];
 
-  const directoryList = [
+  const fallbackDirectoryList = [
     { name: 'Nguyễn Văn Minh', role: 'Trưởng ban', dept: 'Ban Giám đốc', phone: '028 3822 5566 (Ext 101)', email: 'minhnv.mbs@tphcm.gov.vn' },
     { name: 'Lê Thị Thu Hằng', role: 'Phó Trưởng ban (Kỹ thuật)', dept: 'Ban Giám đốc', phone: '028 3822 5566 (Ext 102)', email: 'hangltt.mbs@tphcm.gov.vn' },
-    { name: 'Trần Đình Quân', role: 'Phó Trưởng ban (Kế hoạch - ĐTXD)', dept: 'Ban Giám đốc', phone: '028 3822 5566 (Ext 103)', email: 'quantd.mbs@tphcm.gov.vn' },
-    { name: 'Võ Hoàng Nam', role: 'Chánh Văn phòng', dept: 'Văn phòng Ban', phone: '028 3822 5566 (Ext 201)', email: 'namvh.mbs@tphcm.gov.vn' },
-    { name: 'Phạm Thanh Sơn', role: 'Phó Chánh Văn phòng', dept: 'Văn phòng Ban', phone: '028 3822 5566 (Ext 202)', email: 'sonpt.mbs@tphcm.gov.vn' },
-    { name: 'Ngô Đức Thắng', role: 'Trưởng phòng Kế hoạch - Tài chính', dept: 'Phòng Kế hoạch - Tài chính', phone: '028 3822 5566 (Ext 301)', email: 'thangnd.mbs@tphcm.gov.vn' },
-    { name: 'Đoàn Kim Oanh', role: 'Kế toán trưởng', dept: 'Phòng Kế hoạch - Tài chính', phone: '028 3822 5566 (Ext 302)', email: 'oanhdk.mbs@tphcm.gov.vn' },
-    { name: 'Hoàng Quốc Việt', role: 'Trưởng phòng Quản lý Kỹ thuật & Công nghệ', dept: 'Phòng Quản lý Kỹ thuật', phone: '028 3822 5566 (Ext 401)', email: 'viethq.mbs@tphcm.gov.vn' },
-    { name: 'Trần Văn Long', role: 'Phó Trưởng phòng Quản lý Kỹ thuật', dept: 'Phòng Quản lý Kỹ thuật', phone: '028 3822 5566 (Ext 402)', email: 'longtv.mbs@tphcm.gov.vn' },
-    { name: 'Đỗ Anh Tuấn', role: 'Trưởng phòng Giám sát & Quản lý Chất thải', dept: 'Phòng Giám sát Môi trường', phone: '028 3822 5566 (Ext 501)', email: 'tuanda.mbs@tphcm.gov.vn' },
-    { name: 'Lê Minh Trí', role: 'Đội trưởng Trạm Giám sát Đa Phước (24/7)', dept: 'Trạm Giám sát Hiện trường Đa Phước', phone: '028 3778 1234', email: 'tramdaphuoc.mbs@tphcm.gov.vn' },
-    { name: 'Vũ Đức Thành', role: 'Đội trưởng Trạm Giám sát Phước Hiệp (24/7)', dept: 'Trạm Giám sát Hiện trường Phước Hiệp', phone: '028 3792 5678', email: 'tramphuochiep.mbs@tphcm.gov.vn' },
   ];
 
-  const filteredDirectory = directoryList.filter(
+  const displayList = dbStaffList.length > 0
+    ? dbStaffList.map((s) => ({
+        name: s.fullName,
+        role: s.position,
+        dept: s.department?.name || s.unit?.name || 'Ban Quản lý MBS',
+        phone: s.extension ? `${s.phone || '(028) 3822 5566'} (Ext ${s.extension})` : (s.phone || '--'),
+        email: s.email || '--',
+      }))
+    : fallbackDirectoryList;
+
+  const filteredDirectory = displayList.filter(
     (item) =>
       item.name.toLowerCase().includes(searchDirectory.toLowerCase()) ||
       item.role.toLowerCase().includes(searchDirectory.toLowerCase()) ||
       item.dept.toLowerCase().includes(searchDirectory.toLowerCase())
   );
+
 
   return (
     <div className="bg-slate-50 min-h-screen py-8">

@@ -69,61 +69,33 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({ onNaviga
       return analyticsData.trafficTrend;
     }
 
-    if (chartPreset === '7days') {
-      return [
-        { day: 'T6', date: '04/09/2026', newsViews: 420, visitsPct: 85, docViews: 180, subPct: 35, staffLogins: 42, trendPct: 72 },
-        { day: 'T7', date: '05/09/2026', newsViews: 250, visitsPct: 52, docViews: 110, subPct: 15, staffLogins: 18, trendPct: 62 },
-        { day: 'CN', date: '06/09/2026', newsViews: 190, visitsPct: 42, docViews: 80, subPct: 12, staffLogins: 12, trendPct: 48 },
-        { day: 'T2', date: '07/09/2026', newsViews: 580, visitsPct: 95, docViews: 220, subPct: 45, staffLogins: 38, trendPct: 58 },
-        { day: 'T3', date: '08/09/2026', newsViews: 310, visitsPct: 78, docViews: 290, subPct: 65, staffLogins: 45, trendPct: 74 },
-        { day: 'T4', date: '09/09/2026', newsViews: 250, visitsPct: 75, docViews: 240, subPct: 54, staffLogins: 52, trendPct: 91 },
-        { day: 'T5', date: '10/09/2026', newsViews: 650, visitsPct: 98, docViews: 120, subPct: 22, staffLogins: 48, trendPct: 84 },
-      ];
-    }
+    const daysOfWeek = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+    const now = new Date();
+    let numDays = 7;
+    if (chartPreset === '30days') numDays = 30;
+    else if (chartPreset === 'thisMonth') numDays = Math.max(1, now.getDate());
+    else if (chartPreset === 'lastMonth') numDays = 31;
+    else if (chartPreset === 'custom') numDays = 7;
 
-    if (chartPreset === '30days') {
-      return [
-        { day: '15/08', date: '15/08/2026', newsViews: 310, visitsPct: 65, docViews: 150, subPct: 25, staffLogins: 30, trendPct: 60 },
-        { day: '18/08', date: '18/08/2026', newsViews: 450, visitsPct: 80, docViews: 220, subPct: 38, staffLogins: 42, trendPct: 68 },
-        { day: '21/08', date: '21/08/2026', newsViews: 280, visitsPct: 58, docViews: 190, subPct: 20, staffLogins: 25, trendPct: 55 },
-        { day: '24/08', date: '24/08/2026', newsViews: 490, visitsPct: 88, docViews: 310, subPct: 44, staffLogins: 48, trendPct: 75 },
-        { day: '27/08', date: '27/08/2026', newsViews: 320, visitsPct: 72, docViews: 280, subPct: 35, staffLogins: 39, trendPct: 70 },
-        { day: '30/08', date: '30/08/2026', newsViews: 190, visitsPct: 53, docViews: 110, subPct: 15, staffLogins: 15, trendPct: 50 },
-        { day: '02/09', date: '02/09/2026', newsViews: 150, visitsPct: 45, docViews: 90, subPct: 10, staffLogins: 10, trendPct: 45 },
-        { day: '05/09', date: '05/09/2026', newsViews: 380, visitsPct: 82, docViews: 290, subPct: 42, staffLogins: 44, trendPct: 78 },
-        { day: '08/09', date: '08/09/2026', newsViews: 610, visitsPct: 95, docViews: 420, subPct: 60, staffLogins: 58, trendPct: 88 },
-        { day: '10/09', date: '10/09/2026', newsViews: 650, visitsPct: 98, docViews: 120, subPct: 22, staffLogins: 48, trendPct: 84 },
-      ];
-    }
+    const fallbackItems = [];
+    for (let i = numDays - 1; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(now.getDate() - i);
+      const dayLabel = daysOfWeek[d.getDay()];
+      const dateStr = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}`;
 
-    if (chartPreset === 'thisMonth') {
-      return [
-        { day: '01/09', date: '01/09/2026', newsViews: 350, visitsPct: 75, docViews: 220, subPct: 30, staffLogins: 35, trendPct: 65 },
-        { day: '03/09', date: '03/09/2026', newsViews: 220, visitsPct: 55, docViews: 110, subPct: 15, staffLogins: 18, trendPct: 52 },
-        { day: '05/09', date: '05/09/2026', newsViews: 380, visitsPct: 82, docViews: 290, subPct: 42, staffLogins: 40, trendPct: 72 },
-        { day: '07/09', date: '07/09/2026', newsViews: 580, visitsPct: 95, docViews: 320, subPct: 45, staffLogins: 48, trendPct: 80 },
-        { day: '09/09', date: '09/09/2026', newsViews: 350, visitsPct: 75, docViews: 340, subPct: 54, staffLogins: 52, trendPct: 85 },
-        { day: '10/09', date: '10/09/2026', newsViews: 650, visitsPct: 98, docViews: 120, subPct: 22, staffLogins: 48, trendPct: 84 },
-      ];
+      fallbackItems.push({
+        day: numDays <= 7 ? dayLabel : dateStr,
+        date: `${dateStr}/${d.getFullYear()}`,
+        newsViews: Math.round(180 + (d.getDay() % 3) * 45),
+        docViews: Math.round(120 + (d.getDay() % 2) * 60),
+        staffLogins: d.getDay() > 0 && d.getDay() < 6 ? 18 : 3,
+        visitsPct: 40 + (d.getDay() % 4) * 15,
+        subPct: 30 + (d.getDay() % 3) * 15,
+        trendPct: 45 + (d.getDay() % 3) * 10,
+      });
     }
-
-    if (chartPreset === 'lastMonth') {
-      return [
-        { day: '01/08', date: '01/08/2026', newsViews: 250, visitsPct: 62, docViews: 180, subPct: 22, staffLogins: 28, trendPct: 58 },
-        { day: '08/08', date: '08/08/2026', newsViews: 380, visitsPct: 76, docViews: 290, subPct: 36, staffLogins: 38, trendPct: 66 },
-        { day: '15/08', date: '15/08/2026', newsViews: 310, visitsPct: 70, docViews: 210, subPct: 29, staffLogins: 32, trendPct: 62 },
-        { day: '22/08', date: '22/08/2026', newsViews: 420, visitsPct: 84, docViews: 380, subPct: 41, staffLogins: 46, trendPct: 76 },
-        { day: '29/08', date: '29/08/2026', newsViews: 150, visitsPct: 56, docViews: 130, subPct: 16, staffLogins: 18, trendPct: 54 },
-        { day: '31/08', date: '31/08/2026', newsViews: 350, visitsPct: 80, docViews: 310, subPct: 37, staffLogins: 40, trendPct: 72 },
-      ];
-    }
-
-    return [
-      { day: 'Mốc 1', date: customStartDate, newsViews: 350, visitsPct: 68, docViews: 280, subPct: 27, staffLogins: 32, trendPct: 60 },
-      { day: 'Mốc 2', date: 'Trung gian 1', newsViews: 450, visitsPct: 86, docViews: 390, subPct: 42, staffLogins: 44, trendPct: 74 },
-      { day: 'Mốc 3', date: 'Trung gian 2', newsViews: 380, visitsPct: 76, docViews: 410, subPct: 51, staffLogins: 50, trendPct: 82 },
-      { day: 'Mốc 4', date: customEndDate, newsViews: 620, visitsPct: 96, docViews: 230, subPct: 31, staffLogins: 48, trendPct: 80 },
-    ];
+    return fallbackItems;
   };
 
   const loadAnalytics = (preset = chartPreset, sDate = customStartDate, eDate = customEndDate) => {

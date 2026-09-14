@@ -143,6 +143,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentPath, onNavigat
       title: 'QUẢN TRỊ HỆ THỐNG & CÁN BỘ',
       items: [
         { label: 'Quản lý Cán bộ & Tài khoản', path: '/admin/users', icon: <UserCheck className="w-4 h-4" /> },
+        { label: 'Quản lý Danh bạ điện tử', path: '/admin/staff', icon: <Users className="w-4 h-4" /> },
         { label: 'Ma trận Phân quyền (RBAC)', path: '/admin/roles', icon: <ShieldCheck className="w-4 h-4" /> },
         { label: 'Sao lưu & Phục hồi Dữ liệu', path: '/admin/backup', icon: <Database className="w-4 h-4" /> },
         { label: 'Nhật ký & Audit Logs', path: '/admin/audit-logs', icon: <History className="w-4 h-4" /> },

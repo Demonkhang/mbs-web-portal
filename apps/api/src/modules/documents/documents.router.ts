@@ -365,7 +365,7 @@ documentsRouter.patch('/:id/submit', JwtAuthGuard, PermissionGuard('documents:cr
           type: 'TASK_ASSIGNED',
           title: 'Văn bản mới chờ phê duyệt',
           content: `${user?.fullName || 'Cán bộ'} đã trình duyệt văn bản số hiệu [${updated.code}] - "${updated.title}".`,
-          linkUrl: '/admin/legal-docs',
+          linkUrl: '/admin/documents',
           metadata: { docId: id, code: updated.code },
         }).catch(() => {});
       });
@@ -415,7 +415,7 @@ documentsRouter.patch('/:id/approve', JwtAuthGuard, PermissionGuard('documents:a
         type: 'POST_APPROVED',
         title: 'Văn bản đã được phê duyệt phát hành',
         content: `Văn bản số hiệu [${updated.code}] - "${updated.title}" đã được Lãnh đạo phê duyệt ban hành công khai!`,
-        linkUrl: '/admin/legal-docs',
+        linkUrl: '/admin/documents',
         metadata: { docId: id, code: updated.code },
       }).catch((err) => console.error('Lỗi tạo thông báo approve document:', err));
     }
@@ -468,7 +468,7 @@ documentsRouter.patch('/:id/reject', JwtAuthGuard, PermissionGuard('documents:ap
         type: 'POST_REJECTED',
         title: 'Văn bản bị từ chối phê duyệt',
         content: `Văn bản số hiệu [${updated.code}] - "${updated.title}" đã bị từ chối. Lý do: ${reason.trim()}`,
-        linkUrl: '/admin/legal-docs',
+        linkUrl: '/admin/documents',
         metadata: { docId: id, code: updated.code, reason: reason.trim() },
       }).catch((err) => console.error('Lỗi tạo thông báo reject document:', err));
     }

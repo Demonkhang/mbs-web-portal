@@ -10,6 +10,7 @@ import {
   ExternalLink,
   Trash2,
 } from 'lucide-react';
+import { fetchApi } from '../../services/api-client';
 
 interface NotificationItem {
   id: string;
@@ -37,13 +38,10 @@ export const NotificationBellDropdown: React.FC<NotificationBellDropdownProps> =
 
   const fetchNotifications = async () => {
     try {
-      const res = await fetch('/api/v1/notifications');
-      if (res.ok) {
-        const json = await res.json();
-        if (json.data) {
-          setNotifications(json.data.notifications || []);
-          setUnreadCount(json.data.unreadCount || 0);
-        }
+      const res = await fetchApi<{ success: boolean; data: { notifications: NotificationItem[]; unreadCount: number } }>('/v1/notifications');
+      if (res && res.data) {
+        setNotifications(res.data.notifications || []);
+        setUnreadCount(res.data.unreadCount || 0);
       }
     } catch (err) {
       console.error('Lỗi kết nối API thông báo:', err);
@@ -52,7 +50,12 @@ export const NotificationBellDropdown: React.FC<NotificationBellDropdownProps> =
 
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 15000); // Polling every 15s
+    const interval = setInterval(fetchNotifications, 10000); // Polling every 10s
+
+    const handleCustomNotification = () => {
+      fetchNotifications();
+    };
+    window.addEventListener('mbs_notification_received', handleCustomNotification);
 
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -63,6 +66,7 @@ export const NotificationBellDropdown: React.FC<NotificationBellDropdownProps> =
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
       clearInterval(interval);
+      window.removeEventListener('mbs_notification_received', handleCustomNotification);
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
@@ -70,7 +74,7 @@ export const NotificationBellDropdown: React.FC<NotificationBellDropdownProps> =
   const handleMarkAsRead = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     try {
-      await fetch(`/api/v1/notifications/${id}/read`, { method: 'PATCH' });
+      await fetchApi(`/v1/notifications/${id}/read`, { method: 'PATCH' });
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
       );
@@ -82,7 +86,7 @@ export const NotificationBellDropdown: React.FC<NotificationBellDropdownProps> =
 
   const handleMarkAllAsRead = async () => {
     try {
-      await fetch('/api/v1/notifications/read-all', { method: 'PATCH' });
+      await fetchApi('/v1/notifications/read-all', { method: 'PATCH' });
       setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
       setUnreadCount(0);
     } catch (err) {

@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '@mbs/database';
 import { sendApiResponse } from '../../common/interceptors/response.interceptor';
 import { OptionalJwtAuthGuard } from '../../common/guards/roles.guard';
+import { NotificationService } from '../notifications/notification.service';
 
 export const usersRouter = Router();
 
@@ -298,6 +299,17 @@ usersRouter.put('/:id', async (req: Request, res: Response, next: NextFunction) 
         createdAt: true,
       },
     });
+
+    if (role && role !== existingUser.role) {
+      NotificationService.createNotification({
+        userId: updatedUser.id,
+        type: 'ROLE_UPDATED',
+        title: 'Cập nhật Vai trò & Phân quyền',
+        content: `Tài khoản của bạn vừa được cập nhật vai trò mới: "${updatedUser.role}".`,
+        linkUrl: '/admin/dashboard',
+        metadata: { oldRole: existingUser.role, newRole: updatedUser.role },
+      }).catch(() => {});
+    }
 
     try {
       await prisma.auditLog.create({

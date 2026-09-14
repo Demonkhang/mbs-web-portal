@@ -22,6 +22,7 @@ import { rolesRouter } from './modules/roles/roles.router';
 import { pagesRouter } from './modules/pages/pages.router';
 import { backupRouter } from './modules/backup/backup.router';
 import { notificationsRouter } from './modules/notifications/notifications.router';
+import { directoryRouter } from './modules/directory/directory.router';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -87,6 +88,7 @@ app.use('/api/v1/roles', rolesRouter);
 app.use('/api/v1/pages', pagesRouter);
 app.use('/api/v1/backups', backupRouter);
 app.use('/api/v1/notifications', notificationsRouter);
+app.use('/api/v1/directory', directoryRouter);
 
 // Legacy route aliases for backwards compatibility
 app.use('/api/auth', authRouter);
@@ -103,6 +105,7 @@ app.use('/api/audit-logs', auditLogsRouter);
 app.use('/api/pages', pagesRouter);
 app.use('/api/backups', backupRouter);
 app.use('/api/notifications', notificationsRouter);
+app.use('/api/directory', directoryRouter);
 
 // Global Error Exception Handling (RFC 7807 Problem Details)
 app.use(GlobalExceptionFilter);

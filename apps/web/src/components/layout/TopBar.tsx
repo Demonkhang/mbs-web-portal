@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { CloudSun, Wind, DollarSign, Eye } from 'lucide-react';
+import { CloudSun, Sun, Cloud, CloudRain, CloudLightning, Wind, DollarSign, Eye } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { fetchApi } from '../../services/api-client';
 
 export interface TopBarProps {
   fontSizeLevel?: number;
@@ -11,6 +12,16 @@ export interface TopBarProps {
   fontSize?: 'normal' | 'large' | 'xlarge';
   onChangeFontSize?: (size: 'normal' | 'large' | 'xlarge') => void;
   onNavigate?: (path: string) => void;
+}
+
+interface WeatherData {
+  location: string;
+  temperature: number;
+  weatherText: string;
+  weatherIcon: string;
+  aqi: number;
+  aqiStatus: string;
+  aqiBadgeBg: string;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -25,6 +36,15 @@ export const TopBar: React.FC<TopBarProps> = ({
 }) => {
   const [currentDateTime, setCurrentDateTime] = useState('');
   const [currentLang, setCurrentLang] = useState<'vi' | 'en'>('vi');
+  const [weatherData, setWeatherData] = useState<WeatherData>({
+    location: 'TP.HCM',
+    temperature: 28,
+    weatherText: 'Nắng nhẹ',
+    weatherIcon: 'CloudSun',
+    aqi: 42,
+    aqiStatus: 'Tốt',
+    aqiBadgeBg: 'bg-emerald-700/80 text-emerald-100',
+  });
 
   useEffect(() => {
     const updateTime = () => {
@@ -45,8 +65,41 @@ export const TopBar: React.FC<TopBarProps> = ({
     return () => clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    const fetchWeatherData = async () => {
+      try {
+        const res = await fetchApi<{ success: boolean; data: WeatherData }>('/v1/utilities/weather');
+        if (res && res.success && res.data) {
+          setWeatherData(res.data);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch weather data:', err);
+      }
+    };
+
+    fetchWeatherData();
+    const weatherTimer = setInterval(fetchWeatherData, 15 * 60 * 1000);
+    return () => clearInterval(weatherTimer);
+  }, []);
+
   const handleFontSelect = (size: 'normal' | 'large' | 'xlarge') => {
     if (onChangeFontSize) onChangeFontSize(size);
+  };
+
+  const renderWeatherIcon = (iconName: string) => {
+    switch (iconName) {
+      case 'Sun':
+        return <Sun className="w-3.5 h-3.5 text-amber-400 shrink-0" />;
+      case 'Cloud':
+        return <Cloud className="w-3.5 h-3.5 text-slate-300 shrink-0" />;
+      case 'CloudRain':
+        return <CloudRain className="w-3.5 h-3.5 text-blue-300 shrink-0" />;
+      case 'CloudLightning':
+        return <CloudLightning className="w-3.5 h-3.5 text-yellow-300 shrink-0" />;
+      case 'CloudSun':
+      default:
+        return <CloudSun className="w-3.5 h-3.5 text-amber-300 shrink-0" />;
+    }
   };
 
   return (
@@ -66,19 +119,19 @@ export const TopBar: React.FC<TopBarProps> = ({
           <div className="h-3 w-px bg-emerald-800 hidden sm:block"></div>
 
           {/* Weather */}
-          <div className="flex items-center gap-1.5 whitespace-nowrap text-emerald-100 hover:text-white transition-colors" title="Thời tiết TP.HCM">
-            <CloudSun className="w-3.5 h-3.5 text-amber-300 shrink-0" />
-            <span>TP.HCM: <strong className="text-white font-semibold">28°C</strong></span>
+          <div className="flex items-center gap-1.5 whitespace-nowrap text-emerald-100 hover:text-white transition-colors" title={`Thời tiết ${weatherData.location}: ${weatherData.weatherText}`}>
+            {renderWeatherIcon(weatherData.weatherIcon)}
+            <span>{weatherData.location}: <strong className="text-white font-semibold">{weatherData.temperature}°C</strong> ({weatherData.weatherText})</span>
           </div>
 
           <div className="h-3 w-px bg-emerald-800"></div>
 
           {/* AQI */}
-          <div className="flex items-center gap-1.5 whitespace-nowrap" title="Chỉ số chất lượng không khí (AQI) tại Khu LHXLCT Đa Phước">
+          <div className="flex items-center gap-1.5 whitespace-nowrap" title="Chỉ số chất lượng không khí (AQI) thực tế">
             <Wind className="w-3.5 h-3.5 text-teal-300 shrink-0" />
             <span>AQI:</span>
-            <span className="px-1.5 py-0.2 rounded-xs bg-emerald-700/80 text-emerald-100 font-bold text-[11px]">
-              42 (Tốt)
+            <span className={cn("px-1.5 py-0.2 rounded-xs font-bold text-[11px]", isHighContrast ? "bg-yellow-400 text-black font-extrabold" : weatherData.aqiBadgeBg)}>
+              {weatherData.aqi} ({weatherData.aqiStatus})
             </span>
           </div>
 

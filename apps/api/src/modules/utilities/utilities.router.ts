@@ -14,29 +14,113 @@ const excelUpload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
 });
 
-function syncWeatherData() {
-  const weatherPayload = {
-    location: 'TP. Hồ Chí Minh',
-    temperature: 31.5,
-    humidity: 75,
-    aqi: 42,
-    aqiCategory: 'Tốt (Good)',
-    weatherDesc: 'Nắng nhẹ, mây rải rác',
-    updatedAt: new Date().toISOString(),
-  };
-  redisService.set('weather:tphcm', weatherPayload, 1800);
+let weatherCache: any = null;
+let lastFetchTime = 0;
+const CACHE_DURATION_MS = 15 * 60 * 1000; // 15 phút cache
+
+async function fetchLiveOpenMeteoWeather() {
+  const now = Date.now();
+  if (weatherCache && now - lastFetchTime < CACHE_DURATION_MS) {
+    return weatherCache;
+  }
+
+  try {
+    const [weatherRes, aqiRes] = await Promise.all([
+      fetch('https://api.open-meteo.com/v1/forecast?latitude=10.8231&longitude=106.6297&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m'),
+      fetch('https://air-quality-api.open-meteo.com/v1/air-quality?latitude=10.8231&longitude=106.6297&current=us_aqi,pm2_5'),
+    ]);
+
+    const weatherJson = await weatherRes.json();
+    const aqiJson = await aqiRes.json();
+
+    const rawTemp = weatherJson?.current?.temperature_2m;
+    const temp = rawTemp !== undefined ? Math.round(rawTemp * 10) / 10 : 28.5;
+    const weatherCode = weatherJson?.current?.weather_code ?? 1;
+    const humidity = weatherJson?.current?.relative_humidity_2m ?? 75;
+    const aqiVal = Math.round(aqiJson?.current?.us_aqi ?? 42);
+
+    let weatherText = 'Trời nắng nhẹ';
+    let weatherIcon = 'CloudSun';
+
+    if (weatherCode === 0) {
+      weatherText = 'Trời nắng quang';
+      weatherIcon = 'Sun';
+    } else if (weatherCode >= 1 && weatherCode <= 3) {
+      weatherText = 'Trời có mây nhẹ';
+      weatherIcon = 'CloudSun';
+    } else if (weatherCode === 45 || weatherCode === 48) {
+      weatherText = 'Sương mờ';
+      weatherIcon = 'Cloud';
+    } else if (weatherCode >= 51 && weatherCode <= 82) {
+      weatherText = 'Có mưa rào';
+      weatherIcon = 'CloudRain';
+    } else if (weatherCode >= 95) {
+      weatherText = 'Mưa dông';
+      weatherIcon = 'CloudLightning';
+    }
+
+    let aqiStatus = 'Tốt';
+    let aqiBadgeBg = 'bg-emerald-700/80 text-emerald-100';
+
+    if (aqiVal <= 50) {
+      aqiStatus = 'Tốt';
+      aqiBadgeBg = 'bg-emerald-700/80 text-emerald-100';
+    } else if (aqiVal <= 100) {
+      aqiStatus = 'Trung bình';
+      aqiBadgeBg = 'bg-amber-600/80 text-amber-100';
+    } else if (aqiVal <= 150) {
+      aqiStatus = 'Kém';
+      aqiBadgeBg = 'bg-orange-600/80 text-orange-100';
+    } else {
+      aqiStatus = 'Xấu';
+      aqiBadgeBg = 'bg-rose-700/80 text-rose-100';
+    }
+
+    weatherCache = {
+      city: 'TP.HCM',
+      temperature: temp,
+      weatherCode,
+      weatherText,
+      weatherIcon,
+      humidity,
+      aqi: aqiVal,
+      aqiStatus,
+      aqiBadgeBg,
+      updatedAt: new Date().toISOString(),
+    };
+    lastFetchTime = now;
+    return weatherCache;
+  } catch (err) {
+    console.error('[OPEN-METEO WEATHER FETCH ERROR]', err);
+    if (weatherCache) return weatherCache;
+    return {
+      city: 'TP.HCM',
+      temperature: 28.5,
+      weatherCode: 1,
+      weatherText: 'Nắng nhẹ, mây rải rác',
+      weatherIcon: 'CloudSun',
+      humidity: 75,
+      aqi: 42,
+      aqiStatus: 'Tốt',
+      aqiBadgeBg: 'bg-emerald-700/80 text-emerald-100',
+      updatedAt: new Date().toISOString(),
+    };
+  }
 }
-syncWeatherData();
-setInterval(syncWeatherData, 30 * 60 * 1000);
+
+utilitiesRouter.get('/weather', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await fetchLiveOpenMeteoWeather();
+    return sendApiResponse(res, data, 'Dữ liệu thời tiết và chỉ số AQI TP.HCM thời gian thực từ Open-Meteo API');
+  } catch (error) {
+    next(error);
+  }
+});
 
 utilitiesRouter.get('/weather-aqi', async (_req: Request, res: Response, next: NextFunction) => {
   try {
-    let data = redisService.get<any>('weather:tphcm');
-    if (!data) {
-      syncWeatherData();
-      data = redisService.get<any>('weather:tphcm');
-    }
-    return sendApiResponse(res, data, 'Dữ liệu thời tiết và chỉ số chất lượng không khí (AQI) TP.HCM');
+    const data = await fetchLiveOpenMeteoWeather();
+    return sendApiResponse(res, data, 'Dữ liệu thời tiết và chỉ số AQI TP.HCM thời gian thực từ Open-Meteo API');
   } catch (error) {
     next(error);
   }

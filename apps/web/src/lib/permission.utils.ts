@@ -81,6 +81,7 @@ export function getAllowedAdminRoutes(role: UserRole | string): string[] {
         '/admin/inquiries/faq',
         '/admin/schedules',
         '/admin/organization',
+        '/admin/staff',
         '/admin/users',
         '/admin/roles',
         '/admin/backup',
@@ -98,6 +99,8 @@ export function getAllowedAdminRoutes(role: UserRole | string): string[] {
         '/admin/media',
         '/admin/inquiries/faq',
         '/admin/schedules',
+        '/admin/staff',
+        '/admin/organization',
       ];
 
     case 'EDITOR':
@@ -140,6 +143,7 @@ export const ROUTE_PERMISSION_MAP: Record<string, string> = {
   '/admin/inquiries/faq': 'faqs:manage',
   '/admin/schedules': 'schedules:manage',
   '/admin/organization': 'users:view',
+  '/admin/staff': 'users:view',
   '/admin/users': 'users:view',
   '/admin/roles': 'roles:manage',
   '/admin/backup': 'system:backup',

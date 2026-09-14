@@ -453,6 +453,62 @@ model Notification {
   @@map("notifications")
 }
 
+model DirectoryUnit {
+  id          String                @id @default(uuid())
+  code        String                @unique
+  name        String
+  address     String?
+  phone       String?
+  email       String?
+  sortOrder   Int                   @default(0) @map("sort_order")
+  isActive    Boolean               @default(true) @map("is_active")
+  createdAt   DateTime              @default(now()) @map("created_at")
+  updatedAt   DateTime              @updatedAt @map("updated_at")
+  departments DirectoryDepartment[]
+  staffs      DirectoryStaff[]
+
+  @@map("directory_units")
+}
+
+model DirectoryDepartment {
+  id        String           @id @default(uuid())
+  unitId    String           @map("unit_id")
+  unit      DirectoryUnit    @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  code      String           @unique
+  name      String
+  phone     String?
+  email     String?
+  sortOrder Int              @default(0) @map("sort_order")
+  isActive  Boolean          @default(true) @map("is_active")
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+  staffs    DirectoryStaff[]
+
+  @@map("directory_departments")
+}
+
+model DirectoryStaff {
+  id           String               @id @default(uuid())
+  unitId       String?              @map("unit_id")
+  unit         DirectoryUnit?       @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  departmentId String?              @map("department_id")
+  department   DirectoryDepartment? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  fullName     String               @map("full_name")
+  position     String
+  phone        String?
+  extension    String?
+  email        String?
+  avatarUrl    String?              @map("avatar_url")
+  duties       String?              @db.Text
+  sortOrder    Int                  @default(0) @map("sort_order")
+  isActive     Boolean              @default(true) @map("is_active")
+  createdAt    DateTime             @default(now()) @map("created_at")
+  updatedAt    DateTime             @updatedAt @map("updated_at")
+
+  @@map("directory_staffs")
+}
+
+
 
 
 

@@ -3,6 +3,8 @@ import { prisma } from '@mbs/database';
 import { sendApiResponse } from '../../common/interceptors/response.interceptor';
 import { RateLimiterMiddleware } from '../../common/middleware/rate-limiter.middleware';
 import { generateTrackingCode } from '../../common/utils/tracking-code.generator';
+import { NotificationService } from '../notifications/notification.service';
+import { EmailDispatcherService } from '../notifications/email-dispatcher.service';
 
 export const submissionsRouter = Router();
 
@@ -162,7 +164,32 @@ submissionsRouter.post('/', RateLimiterMiddleware(10, 60), async (req: Request, 
       },
     });
 
-    console.log(`[EMAIL DISPATCH] Tự động gửi email xác nhận mã tra cứu ${trackingCode} đến: ${applicantEmail}`);
+    // Notify admins & leadership in-app bell
+    prisma.user.findMany({
+      where: { role: { in: ['SUPER_ADMIN', 'ADMIN', 'APPROVER'] } },
+      select: { id: true },
+    }).then((admins) => {
+      admins.forEach((u) => {
+        NotificationService.createNotification({
+          userId: u.id,
+          type: 'SUBMISSION_NEW',
+          title: 'Hồ sơ Dịch vụ công mới',
+          content: `${applicantName} vừa nộp hồ sơ "${serviceName}". Mã tra cứu: ${trackingCode}`,
+          linkUrl: '/admin/submissions',
+          metadata: { submissionId: submission.id, trackingCode },
+        }).catch(() => {});
+      });
+    }).catch(() => {});
+
+    // Dispatch email confirmation to applicant
+    EmailDispatcherService.sendEmail({
+      toEmail: applicantEmail,
+      toName: applicantName,
+      type: 'SUBMISSION_NEW' as any,
+      title: `Xác nhận tiếp nhận hồ sơ [Mã tra cứu: ${trackingCode}]`,
+      content: `Hồ sơ thủ tục "<strong>${serviceName}</strong>" của ông/bà đã được Bộ phận Một cửa MBS tiếp nhận thành công vào hệ thống. Mã tra cứu tiến độ của ông/bà là: <strong style="color: #10b981; font-size: 16px;">${trackingCode}</strong>. Ngày hẹn trả kết quả dự kiến: ${new Date(expectedDate).toLocaleDateString('vi-VN')}.`,
+      linkUrl: `/dich-vu-cong?code=${trackingCode}`,
+    }).catch(() => {});
 
     return sendApiResponse(
       res,

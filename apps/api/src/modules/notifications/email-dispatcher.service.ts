@@ -1,4 +1,5 @@
 import { NotificationType } from '@mbs/database';
+import nodemailer, { Transporter } from 'nodemailer';
 
 export interface SendEmailPayload {
   toEmail: string;
@@ -11,13 +12,35 @@ export interface SendEmailPayload {
 }
 
 export class EmailDispatcherService {
+  private static transporter: Transporter | null = null;
+
+  private static getTransporter() {
+    if (this.transporter) return this.transporter;
+
+    const host = process.env.SMTP_HOST;
+    const port = parseInt(process.env.SMTP_PORT || '587');
+    const user = process.env.SMTP_USER;
+    const pass = process.env.SMTP_PASS;
+
+    if (host && user && pass) {
+      this.transporter = nodemailer.createTransport({
+        host,
+        port,
+        secure: port === 465,
+        auth: { user, pass },
+      });
+    }
+    return this.transporter;
+  }
+
   /**
    * Generates a modern, governmental HTML email template for Ban Quản lý MBS TP.HCM
    */
   private static generateHtmlTemplate(payload: SendEmailPayload): string {
     const { toName, type, title, content, linkUrl } = payload;
     const currentYear = new Date().getFullYear();
-    const actionUrl = linkUrl ? `http://localhost:3000/#${linkUrl}` : 'http://localhost:3000/#/admin/dashboard';
+    const baseUrl = process.env.PUBLIC_SITE_URL || 'http://localhost:3000';
+    const actionUrl = linkUrl ? `${baseUrl}/#${linkUrl}` : `${baseUrl}/#/admin/dashboard`;
 
     let badgeText = 'THÔNG BÁO HỆ THỐNG';
     let badgeBg = '#0f766e'; // teal-700
@@ -64,13 +87,13 @@ export class EmailDispatcherService {
     <body>
       <div class="container">
         <div class="header">
-          <div class="logo-title">BAN QUẢN LÝ KHU DỰ TRỮ SINH QUYỂN MÔI TRƯỜNG MBS</div>
+          <div class="logo-title">BAN QUẢN LÝ KHU DỰ TRỮ SINH QUYỀN MÔI TRƯỜNG MBS</div>
           <div class="logo-subtitle">CỔNG THÔNG TIN ĐIỆN TỬ & DỊCH VỤ CÔNG TRỰC TUYẾN</div>
         </div>
         <div class="body">
           <span class="badge">${badgeText}</span>
           <h2 class="title">${title}</h2>
-          <p class="greeting">Kính gửi Đồng chí <strong>${toName}</strong>,</p>
+          <p class="greeting">Kính gửi <strong>${toName}</strong>,</p>
           <div class="content-box">
             ${content}
           </div>
@@ -94,13 +117,26 @@ export class EmailDispatcherService {
   static async sendEmail(payload: SendEmailPayload): Promise<boolean> {
     try {
       const htmlContent = this.generateHtmlTemplate(payload);
+      const transporter = this.getTransporter();
 
-      // Log email delivery to console in development mode
-      console.log(`====================================================`);
-      console.log(`📧 [AUTOMATED EMAIL DISPATCHER] -> Sending Email to: ${payload.toName} <${payload.toEmail}>`);
-      console.log(`📌 Subject: [MBS PORTAL] ${payload.title}`);
-      console.log(`🔗 Target URL: http://localhost:3000/#${payload.linkUrl || '/admin/dashboard'}`);
-      console.log(`====================================================`);
+      const fromEmail = process.env.SMTP_FROM || 'Ban Quản lý MBS <no-reply@mbs.hochiminhcity.gov.vn>';
+      const subject = `[MBS PORTAL] ${payload.title}`;
+
+      if (transporter) {
+        await transporter.sendMail({
+          from: fromEmail,
+          to: `${payload.toName} <${payload.toEmail}>`,
+          subject,
+          html: htmlContent,
+        });
+        console.log(`✅ [EMAIL DISPATCHER] Successfully sent SMTP email to ${payload.toEmail}`);
+      } else {
+        console.log(`====================================================`);
+        console.log(`📧 [EMAIL DISPATCHER - DEV LOG] -> Sending Email to: ${payload.toName} <${payload.toEmail}>`);
+        console.log(`📌 Subject: ${subject}`);
+        console.log(`🔗 Target URL: ${payload.linkUrl || '/admin/dashboard'}`);
+        console.log(`====================================================`);
+      }
 
       return true;
     } catch (err) {
