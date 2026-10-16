@@ -13,7 +13,7 @@
     "dev:api": "npm run dev --workspace=@mbs/api",
     "dev:all": "turbo run dev || npm run dev --workspaces",
     "build": "vite build",
-    "build:vercel": "prisma generate --schema=packages/database/prisma/schema.prisma && vite build",
+    "build:vercel": "prisma generate --schema=packages/database/prisma/schema.prisma && esbuild apps/api/src/vercel-handler.ts --bundle --platform=node --target=node20 --format=esm --outfile=api/index.js --external:@prisma/client && vite build",
     "build:all": "turbo run build || npm run build --workspaces",
     "db:push": "prisma db push --schema=packages/database/prisma/schema.prisma",
     "db:seed": "tsx scratch/seed-postgres.ts",

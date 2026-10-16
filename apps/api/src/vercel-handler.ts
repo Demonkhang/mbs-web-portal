@@ -1,10 +1,10 @@
-import app from '../apps/api/src/main';
+import app from './main';
 
 /**
- * Vercel Serverless Function entry point for Express API
+ * Production Vercel Serverless Function entry point for Express API
  */
 export default function handler(req: any, res: any) {
-  // Normalize req.url when rewritten by Vercel router
+  // Normalize req.url when rewritten by Vercel edge router
   const matchedPath = req.headers['x-matched-path'] as string | undefined;
   if (matchedPath) {
     const queryIndex = req.url.indexOf('?');
