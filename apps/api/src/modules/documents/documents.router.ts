@@ -10,9 +10,16 @@ import { NotificationService } from '../notifications/notification.service';
 export const documentsRouter = Router();
 
 // Multer storage for legal documents isolated from Media Photo Gallery table
-const docUploadDir = path.join(process.cwd(), 'uploads', 'documents');
-if (!fs.existsSync(docUploadDir)) {
-  fs.mkdirSync(docUploadDir, { recursive: true });
+const docUploadDir = process.env.VERCEL
+  ? path.join('/tmp', 'uploads', 'documents')
+  : path.join(process.cwd(), 'uploads', 'documents');
+
+try {
+  if (!fs.existsSync(docUploadDir)) {
+    fs.mkdirSync(docUploadDir, { recursive: true });
+  }
+} catch (e) {
+  console.warn('[documentsRouter] Could not create upload directory:', e);
 }
 
 const storage = multer.diskStorage({

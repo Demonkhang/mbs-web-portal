@@ -31,5 +31,5 @@
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
-  "include": ["apps/**/*", "packages/**/*", "vite.config.ts"]
+  "include": ["apps/**/*", "packages/**/*", "vite.config.ts", "api/**/*"]
 }

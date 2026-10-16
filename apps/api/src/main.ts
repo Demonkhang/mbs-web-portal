@@ -110,7 +110,7 @@ app.use('/api/directory', directoryRouter);
 // Global Error Exception Handling (RFC 7807 Problem Details)
 app.use(GlobalExceptionFilter);
 
-if (process.env.APP_TEST !== 'true') {
+if (process.env.APP_TEST !== 'true' && !process.env.VERCEL) {
   app.listen(PORT, () => {
     console.log(`====================================================`);
     console.log(`🚀 MBS Core Enterprise Backend API Server running on port ${PORT}`);

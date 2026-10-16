@@ -3,11 +3,17 @@ import path from 'path';
 import crypto from 'crypto';
 import { prisma, BackupTriggerType } from '@mbs/database';
 
-const BACKUP_DIR = path.resolve(process.cwd(), 'backups');
+const BACKUP_DIR = process.env.VERCEL
+  ? path.resolve('/tmp', 'backups')
+  : path.resolve(process.cwd(), 'backups');
 
-// Ensure backup directory exists
-if (!fs.existsSync(BACKUP_DIR)) {
-  fs.mkdirSync(BACKUP_DIR, { recursive: true });
+// Ensure backup directory exists safely
+try {
+  if (!fs.existsSync(BACKUP_DIR)) {
+    fs.mkdirSync(BACKUP_DIR, { recursive: true });
+  }
+} catch (e) {
+  console.warn('[BackupEngineService] Could not create backup directory:', e);
 }
 
 export class BackupEngineService {

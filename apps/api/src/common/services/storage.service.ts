@@ -17,13 +17,18 @@ export class StorageService {
   }
 
   public static getUploadDir(): string {
-    const uploadPath = process.env.LOCAL_UPLOAD_PATH || './uploads';
+    const defaultPath = process.env.VERCEL ? '/tmp/uploads' : './uploads';
+    const uploadPath = process.env.LOCAL_UPLOAD_PATH || defaultPath;
     const absolutePath = path.isAbsolute(uploadPath)
       ? uploadPath
       : path.join(process.cwd(), uploadPath);
 
-    if (!fs.existsSync(absolutePath)) {
-      fs.mkdirSync(absolutePath, { recursive: true });
+    try {
+      if (!fs.existsSync(absolutePath)) {
+        fs.mkdirSync(absolutePath, { recursive: true });
+      }
+    } catch (e) {
+      console.warn(`[StorageService] Could not create upload directory at ${absolutePath}:`, e);
     }
     return absolutePath;
   }
