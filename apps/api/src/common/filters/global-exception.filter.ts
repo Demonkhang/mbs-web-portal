@@ -19,7 +19,7 @@ export function GlobalExceptionFilter(err: unknown, req: Request, res: Response,
                      (typeof errorObj?.statusCode === 'number' ? errorObj.statusCode : null) || 500;
   
   let title = 'Internal Server Error';
-  let detail = 'Hệ thống đã xảy ra sự cố kỹ thuật. Vui lòng thử lại sau.';
+  let detail = (err as any)?.message || 'Hệ thống đã xảy ra sự cố kỹ thuật. Vui lòng thử lại sau.';
   let invalidParams: { field: string; message: string }[] | undefined;
 
   if (statusCode === 400) {

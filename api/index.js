@@ -65253,8 +65253,22 @@ __export(src_exports, {
 __reExport(src_exports, client_star);
 import { PrismaClient } from "@prisma/client";
 import * as client_star from "@prisma/client";
+function cleanDatabaseUrl(url) {
+  if (!url) return void 0;
+  let clean = url.trim();
+  if (clean.startsWith("'") && clean.endsWith("'") || clean.startsWith('"') && clean.endsWith('"')) {
+    clean = clean.slice(1, -1).trim();
+  }
+  clean = clean.replace("&channel_binding=require", "").replace("channel_binding=require&", "").replace("?channel_binding=require", "");
+  return clean;
+}
+if (process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = cleanDatabaseUrl(process.env.DATABASE_URL);
+}
 var globalForPrisma = global;
+var cleanedUrl = cleanDatabaseUrl(process.env.DATABASE_URL);
 var prisma = globalForPrisma.prisma || new PrismaClient({
+  datasources: cleanedUrl ? { db: { url: cleanedUrl } } : void 0,
   log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"]
 });
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
@@ -65304,7 +65318,7 @@ function GlobalExceptionFilter(err, req, res, _next) {
   const errorObj = err;
   const statusCode = (typeof errorObj?.status === "number" ? errorObj.status : null) || (typeof errorObj?.statusCode === "number" ? errorObj.statusCode : null) || 500;
   let title = "Internal Server Error";
-  let detail = "H\u1EC7 th\u1ED1ng \u0111\xE3 x\u1EA3y ra s\u1EF1 c\u1ED1 k\u1EF9 thu\u1EADt. Vui l\xF2ng th\u1EED l\u1EA1i sau.";
+  let detail = err?.message || "H\u1EC7 th\u1ED1ng \u0111\xE3 x\u1EA3y ra s\u1EF1 c\u1ED1 k\u1EF9 thu\u1EADt. Vui l\xF2ng th\u1EED l\u1EA1i sau.";
   let invalidParams;
   if (statusCode === 400) {
     title = "Bad Request";
