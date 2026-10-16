@@ -2,9 +2,12 @@ import express from 'express';
 import dotenv from 'dotenv';
 import path from 'path';
 
-// Load environment variables without overwriting explicitly set variables like NODE_ENV
-dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
-dotenv.config();
+// Load environment variables safely for both ESM and cloud environments
+try {
+  dotenv.config();
+} catch (_e) {
+  // Ignored in cloud environments where process.env is pre-injected
+}
 
 import { LoggingInterceptor, AuditLogInterceptor } from './common/interceptors/logging.interceptor';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
